@@ -37,9 +37,10 @@ dependencies = [
 dev = ["pytest>=7.4.0", "pytest-asyncio>=0.23.0", "build>=1.2.0", "twine>=5.0.0"]
 
 [project.urls]
-Homepage      = "https://github.com/muhammadbalawal/PacketTracerMCP"
-Repository    = "https://github.com/muhammadbalawal/PacketTracerMCP"
-Issues        = "https://github.com/muhammadbalawal/PacketTracerMCP/issues"
+Homepage      = "https://github.com/muhammadbalawal/cisco-pt-mcp"
+Repository    = "https://github.com/muhammadbalawal/cisco-pt-mcp"
+Issues        = "https://github.com/muhammadbalawal/cisco-pt-mcp/issues"
+Changelog     = "https://github.com/muhammadbalawal/cisco-pt-mcp/releases"
 
 [project.scripts]
 cisco-pt-mcp = "mcp_server.server:main"

@@ -1,5 +1,11 @@
 # cisco-pt-mcp
 
+[![PyPI version](https://img.shields.io/pypi/v/cisco-pt-mcp.svg)](https://pypi.org/project/cisco-pt-mcp/)
+[![Python versions](https://img.shields.io/pypi/pyversions/cisco-pt-mcp.svg)](https://pypi.org/project/cisco-pt-mcp/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/cisco-pt-mcp.svg)](https://pypi.org/project/cisco-pt-mcp/)
+[![Publish to PyPI](https://github.com/muhammadbalawal/cisco-pt-mcp/actions/workflows/publish.yml/badge.svg)](https://github.com/muhammadbalawal/cisco-pt-mcp/actions/workflows/publish.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 An [MCP](https://modelcontextprotocol.io/) server that lets any MCP-aware
 client (Claude Desktop, Cursor, Backboard, VS Code, ...) drive a running
 **Cisco Packet Tracer** instance.
@@ -112,8 +118,8 @@ is intentionally not built in.
 ### 2. Extension
 
 1. **Download** `cisco-pt-mcp.pts` from the repo:
-   [github.com/muhammadbalawal/PacketTracerMCP/raw/main/extension/cisco-pt-mcp.pts](https://github.com/muhammadbalawal/PacketTracerMCP/raw/main/extension/cisco-pt-mcp.pts)
-   (or grab the latest `.pts` from the [Releases](https://github.com/muhammadbalawal/PacketTracerMCP/releases) page).
+   [github.com/muhammadbalawal/cisco-pt-mcp/raw/main/extension/cisco-pt-mcp.pts](https://github.com/muhammadbalawal/cisco-pt-mcp/raw/main/extension/cisco-pt-mcp.pts)
+   (or grab the latest `.pts` from the [Releases](https://github.com/muhammadbalawal/cisco-pt-mcp/releases) page).
 2. In Packet Tracer: **Extensions → Extensions Manager → Install Extension…**
 3. Select the downloaded `cisco-pt-mcp.pts`.
 4. Restart Packet Tracer when prompted.
