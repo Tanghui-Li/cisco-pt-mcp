@@ -4,20 +4,14 @@ An [MCP](https://modelcontextprotocol.io/) server that lets any MCP-aware
 client (Claude Desktop, Cursor, Backboard, VS Code, ...) drive a running
 **Cisco Packet Tracer** instance.
 
-```
-┌───────────────────┐                       ┌──────────────────────┐
-│                   │                       │     cisco-pt-mcp     │
-│     MCP client    │ ◄──── stdio MCP ────► │   server (Python)    │
-│                   │                       │                      │
-└───────────────────┘                       └───────────┬──────────┘
-                                                        │
-                                                        │  Socket.IO 127.0.0.1:7531
-                                                        ▼
-                                           ┌─────────────────────────┐
-                                           │      Packet Tracer +    │
-                                           │     cisco-pt-mcp.pts    │
-                                           │     bridge extension    │
-                                           └─────────────────────────┘
+```mermaid
+flowchart LR
+    client["MCP client"]
+    server["cisco-pt-mcp<br/>server (Python)"]
+    pt["Packet Tracer<br/>+ cisco-pt-mcp.pts<br/>bridge extension"]
+
+    client <-- "stdio MCP" --> server
+    server <-- "Socket.IO<br/>127.0.0.1:7531" --> pt
 ```
 
 The PT extension shows a small bridge window (Extensions → **Packet Tracer MCP**)
@@ -55,61 +49,36 @@ load-bearing — see Cisco's own `Cisco-Agent` extension for the same pattern.
 
 ### 1. Server
 
-```cmd
-cd C:\path\to\PacketTracerMCP
-py -m pip install -e .
-```
+The server is published on PyPI. No cloning or venv setup required — `uvx` handles
+everything in an isolated environment. [Install `uv`](https://docs.astral.sh/uv/getting-started/installation/)
+if you don't have it yet (single command on any platform), then register the server
+with your MCP client:
 
-That registers a `cisco-pt-mcp.exe` console script in your venv's
-`Scripts\` folder.
-
-### 2. Extension
-
-Copy the built `.pts` into PT's per-user extensions directory:
-
-```cmd
-mkdir "%USERPROFILE%\Cisco Packet Tracer 9.0.0\extensions\PacketTracerMCP"
-copy "extension\PacketTracerMCP.pts" "%USERPROFILE%\Cisco Packet Tracer 9.0.0\extensions\PacketTracerMCP\"
-```
-
-(Adjust `9.0.0` to match your installed PT version.)
-
-Restart Packet Tracer. **Extensions → Packet Tracer MCP** should appear
-in the menu — click it to open the bridge window.
-
-To rebuild after editing `extension/source/*.js`, use PT's
-**Extensions → Scripting** workflow to re-package the source folder
-into a new `.pts`, then recopy.
-
-### 3. Wire it into your MCP client
-
-After `pip install -e .` the `cisco-pt-mcp` binary is on `PATH`. Every MCP-aware
-client takes the same one-line registration — only the config file shape differs.
-
-| Client          | How to add it                                                                  |
-|-----------------|--------------------------------------------------------------------------------|
-| Claude Code     | `claude mcp add cisco-pt-mcp --scope user -- cisco-pt-mcp`                     |
-| Claude Desktop  | `%APPDATA%\Claude\claude_desktop_config.json` — JSON below                     |
-| Cursor          | `%USERPROFILE%\.cursor\mcp.json` (or `.cursor/mcp.json` per project) — same JSON as Claude Desktop |
-| VS Code         | `.vscode/mcp.json` or `code --add-mcp "{\"name\":\"cisco-pt-mcp\",\"command\":\"cisco-pt-mcp\"}"` |
-| Codex CLI       | `%USERPROFILE%\.codex\config.toml` — TOML below                                |
+| Client         | One-line registration                                                              |
+|----------------|------------------------------------------------------------------------------------|
+| Claude Code    | `claude mcp add cisco-pt-mcp --scope user -- uvx cisco-pt-mcp`                    |
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` — JSON below                        |
+| Cursor         | `%USERPROFILE%\.cursor\mcp.json` (or `.cursor/mcp.json` per project) — same JSON  |
+| VS Code        | `.vscode/mcp.json` — JSON below (note different key name)                         |
+| Codex CLI      | `%USERPROFILE%\.codex\config.toml` — TOML below                                   |
+| Backboard CLI  | `backboard config add-mcp '{"name": "cisco-pt-mcp", "command": "uvx", "args": ["cisco-pt-mcp"]}'` |
 
 **Claude Desktop / Cursor** (`mcpServers`):
 
 ```json
 {
   "mcpServers": {
-    "cisco-pt-mcp": { "command": "cisco-pt-mcp" }
+    "cisco-pt-mcp": { "command": "uvx", "args": ["cisco-pt-mcp"] }
   }
 }
 ```
 
-**VS Code** (`servers` — note the different key name):
+**VS Code** (`servers`):
 
 ```json
 {
   "servers": {
-    "cisco-pt-mcp": { "command": "cisco-pt-mcp" }
+    "cisco-pt-mcp": { "command": "uvx", "args": ["cisco-pt-mcp"] }
   }
 }
 ```
@@ -118,19 +87,46 @@ client takes the same one-line registration — only the config file shape diffe
 
 ```toml
 [mcp_servers.cisco-pt-mcp]
-command = "cisco-pt-mcp"
+command = "uvx"
+args = ["cisco-pt-mcp"]
 ```
 
-If a Windows GUI client can't find `cisco-pt-mcp` (PATH inheritance from
-non-shell parents is unreliable), fall back to either an absolute path
-(`C:\\path\\to\\.venv\\Scripts\\cisco-pt-mcp.exe`) or `python -m mcp_server`:
+**Backboard CLI** (one-shot command, persists to `~/.backboard/config.json`):
 
-```json
-{ "mcpServers": { "cisco-pt-mcp": { "command": "py", "args": ["-m", "mcp_server"] } } }
+```cmd
+backboard config add-mcp "{\"name\": \"cisco-pt-mcp\", \"command\": \"uvx\", \"args\": [\"cisco-pt-mcp\"]}"
 ```
+
+Verify with `backboard config list-mcp`. Toggle off/on later with
+`backboard config disable-mcp cisco-pt-mcp` / `enable-mcp cisco-pt-mcp`.
+
+> **Fallback:** If `uvx` isn't available, install the package manually and point
+> directly at the binary:
+> ```json
+> { "mcpServers": { "cisco-pt-mcp": { "command": "C:\\path\\to\\.venv\\Scripts\\cisco-pt-mcp.exe" } } }
+> ```
 
 For remote use, expose this server through `mcp-remote`; HTTP transport
 is intentionally not built in.
+
+### 2. Extension
+
+1. **Download** `cisco-pt-mcp.pts` from the repo:
+   [github.com/muhammadbalawal/PacketTracerMCP/raw/main/extension/cisco-pt-mcp.pts](https://github.com/muhammadbalawal/PacketTracerMCP/raw/main/extension/cisco-pt-mcp.pts)
+   (or grab the latest `.pts` from the [Releases](https://github.com/muhammadbalawal/PacketTracerMCP/releases) page).
+2. In Packet Tracer: **Extensions → Extensions Manager → Install Extension…**
+3. Select the downloaded `cisco-pt-mcp.pts`.
+4. Restart Packet Tracer when prompted.
+
+**Extensions → Packet Tracer MCP** now shows in the menu — click it to
+open the bridge window.
+
+> Prefer to drop it in by hand? The per-user extensions directory is
+> `%USERPROFILE%\Cisco Packet Tracer <version>\extensions\cisco-pt-mcp\`.
+
+To rebuild after editing `extension/source/*.js`, use PT's
+**Extensions → Scripting** workflow to re-package the source folder
+into a new `.pts`, then reinstall via the Extensions Manager.
 
 ## Run
 
@@ -172,8 +168,8 @@ and the constants in `mcp_server/bridge.py`, then rebuild the `.pts`.
 ## Tests
 
 ```cmd
-py -m pip install -e .[dev]
-py -m pytest tests\ -v
+pip install -e .[dev]
+pytest tests\ -v
 ```
 
 Offline tests — no Packet Tracer required.
