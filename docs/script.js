@@ -7,7 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
       tabs.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       tabs.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
-      tabs.querySelector(`.tab-panel[data-panel="${target}"]`).classList.add('active');
+      const panel = tabs.querySelector(`.tab-panel[data-panel="${target}"]`);
+      if (panel) panel.classList.add('active');
     });
   });
 
@@ -20,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = 'Copied!';
         btn.classList.add('copied');
         setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
-      });
+      }).catch(() => {});
     });
   });
 });
