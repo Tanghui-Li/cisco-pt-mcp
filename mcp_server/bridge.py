@@ -23,12 +23,18 @@ import asyncio
 import logging
 import os
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 import socketio
 from aiohttp import web
 
 log = logging.getLogger(__name__)
+
+
+class PTBridgeProtocolError(RuntimeError):
+    """Raised when the Packet Tracer plugin violates the bridge protocol."""
+
 
 # Loopback only — both ends are local.
 BRIDGE_HOST = "127.0.0.1"
@@ -123,15 +129,39 @@ class PTBridge:
                     self._pending.pop(tcid, None)
 
         @sio.on("tool_result")
-        async def on_tool_result(_sid: str, data: dict) -> None:
-            tcid = (data or {}).get("tool_call_id")
-            if not tcid:
+        async def on_tool_result(_sid: str, data: dict[str, Any] | None) -> None:
+            if not isinstance(data, Mapping):
+                log.warning("tool_result must be an object: %r", data)
+                return
+
+            tcid = data.get("tool_call_id")
+            if not isinstance(tcid, str) or not tcid:
                 log.warning("tool_result missing tool_call_id: %r", data)
                 return
+
             fut = self._pending.pop(tcid, None)
             if fut is None or fut.done():
                 return
-            fut.set_result((data or {}).get("result"))
+
+            if data.get("tool_name") is not None and not isinstance(data.get("tool_name"), str):
+                fut.set_exception(PTBridgeProtocolError("tool_result field 'tool_name' must be a string when present"))
+                return
+
+            tool_input = data.get("tool_input")
+            if tool_input is not None and not isinstance(tool_input, Mapping):
+                fut.set_exception(PTBridgeProtocolError("tool_result field 'tool_input' must be an object when present"))
+                return
+
+            if "result" not in data:
+                fut.set_exception(PTBridgeProtocolError("tool_result missing required field 'result'"))
+                return
+
+            result = data.get("result")
+            if not isinstance(result, Mapping):
+                fut.set_exception(PTBridgeProtocolError("tool_result field 'result' must be an object"))
+                return
+
+            fut.set_result(dict(result))
 
     @property
     def is_connected(self) -> bool:

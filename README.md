@@ -1,23 +1,23 @@
 # cisco-pt-mcp
 
-[![PyPI version](https://img.shields.io/pypi/v/cisco-pt-mcp.svg)](https://pypi.org/project/cisco-pt-mcp/)
-[![Python versions](https://img.shields.io/pypi/pyversions/cisco-pt-mcp.svg)](https://pypi.org/project/cisco-pt-mcp/)
-[![PyPI downloads](https://img.shields.io/pypi/dm/cisco-pt-mcp.svg)](https://pypi.org/project/cisco-pt-mcp/)
-[![Publish to PyPI](https://github.com/muhammadbalawal/cisco-pt-mcp/actions/workflows/publish.yml/badge.svg)](https://github.com/muhammadbalawal/cisco-pt-mcp/actions/workflows/publish.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
 An [MCP](https://modelcontextprotocol.io/) server that lets any MCP-aware
 client (Claude Desktop, Cursor, Backboard, VS Code, ...) drive a running
 **Cisco Packet Tracer** instance.
 
-```mermaid
-flowchart LR
-    client["MCP client"]
-    server["cisco-pt-mcp<br/>server (Python)"]
-    pt["Packet Tracer<br/>+ cisco-pt-mcp.pts<br/>bridge extension"]
-
-    client <-- "stdio MCP" --> server
-    server <-- "Socket.IO<br/>127.0.0.1:7531" --> pt
+```
+┌───────────────────┐                       ┌──────────────────────┐
+│                   │                       │     cisco-pt-mcp     │
+│     MCP client    │ ◄──── stdio MCP ────► │   server (Python)    │
+│                   │                       │                      │
+└───────────────────┘                       └───────────┬──────────┘
+                                                        │
+                                                        │  Socket.IO 127.0.0.1:7531
+                                                        ▼
+                                           ┌─────────────────────────┐
+                                           │      Packet Tracer +    │
+                                           │     cisco-pt-mcp.pts    │
+                                           │     bridge extension    │
+                                           └─────────────────────────┘
 ```
 
 The PT extension shows a small bridge window (Extensions → **Packet Tracer MCP**)
@@ -117,11 +117,12 @@ is intentionally not built in.
 
 ### 2. Extension
 
-1. **Download** `cisco-pt-mcp.pts` from the repo:
-   [github.com/muhammadbalawal/cisco-pt-mcp/raw/main/extension/cisco-pt-mcp.pts](https://github.com/muhammadbalawal/cisco-pt-mcp/raw/main/extension/cisco-pt-mcp.pts)
-   (or grab the latest `.pts` from the [Releases](https://github.com/muhammadbalawal/cisco-pt-mcp/releases) page).
-2. In Packet Tracer: **Extensions → Extensions Manager → Install Extension…**
-3. Select the downloaded `cisco-pt-mcp.pts`.
+Install `extension/cisco-pt-mcp.pts` through Packet Tracer's own
+extension manager:
+
+1. Open Packet Tracer.
+2. **Extensions → Extensions Manager → Install Extension…**
+3. Pick `extension/cisco-pt-mcp.pts` from this repo.
 4. Restart Packet Tracer when prompted.
 
 **Extensions → Packet Tracer MCP** now shows in the menu — click it to

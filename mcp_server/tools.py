@@ -192,6 +192,166 @@ TOOLS: list[dict] = [
             "required": ["deviceName"],
         },
     },
+    {
+        "name": "setSimulationMode",
+        "description": (
+            "Switch Packet Tracer between simulation mode and realtime mode. "
+            "Simulation mode is required before sending PDUs or stepping through traffic."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "toSimMode": {
+                    "type": "boolean",
+                    "description": "true = simulation mode, false = realtime mode.",
+                },
+            },
+            "required": ["toSimMode"],
+        },
+    },
+    {
+        "name": "getSimulationStatus",
+        "description": (
+            "Query the current simulation state: mode (realtime or simulation), "
+            "elapsed simulation time, PDU frame count, and current frame index."
+        ),
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "stepSimulation",
+        "description": (
+            "Step the simulation forward or backward, or reset it entirely. "
+            "PT must already be in simulation mode (use setSimulationMode first)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "direction": {
+                    "type": "string",
+                    "enum": ["forward", "backward", "reset"],
+                    "description": (
+                        "'forward' advances one step, 'backward' goes back one step, "
+                        "'reset' clears all PDUs and returns to time 0."
+                    ),
+                },
+                "steps": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": "Number of steps to take (ignored for 'reset'). Defaults to 1.",
+                },
+            },
+            "required": ["direction"],
+        },
+    },
+    {
+        "name": "sendPdu",
+        "description": (
+            "Add an ICMP ping PDU between two devices using PT's native Simple PDU mechanism. "
+            "Automatically enables simulation mode if not already active. "
+            "Use stepSimulation to advance and getPduResults to check if the ping succeeded."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sourceDevice": {
+                    "type": "string",
+                    "description": "Name of the source device.",
+                },
+                "destinationDevice": {
+                    "type": "string",
+                    "description": "Name of the destination device.",
+                },
+            },
+            "required": ["sourceDevice", "destinationDevice"],
+        },
+    },
+    {
+        "name": "renameDevice",
+        "description": "Rename an existing device. The new name must be unique in the workspace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "deviceName": {"type": "string", "description": "Current device name."},
+                "newName": {"type": "string", "description": "New unique name for the device."},
+            },
+            "required": ["deviceName", "newName"],
+        },
+    },
+    {
+        "name": "moveDevice",
+        "description": "Move a device to new coordinates on the logical workspace canvas.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "deviceName": {"type": "string", "description": "Device to reposition."},
+                "x": {"type": "number", "description": "New X coordinate."},
+                "y": {"type": "number", "description": "New Y coordinate."},
+            },
+            "required": ["deviceName", "x", "y"],
+        },
+    },
+    {
+        "name": "setPower",
+        "description": "Power a device on or off.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "deviceName": {"type": "string", "description": "Device name."},
+                "power": {
+                    "type": "boolean",
+                    "description": "true = power on, false = power off.",
+                },
+            },
+            "required": ["deviceName", "power"],
+        },
+    },
+    {
+        "name": "getPduResults",
+        "description": (
+            "Read the outcome of PDUs in the current simulation — "
+            "source, destination, traffic type, and status (accepted/dropped/in_transit/etc). "
+            "Call after stepSimulation to verify connectivity. "
+            "Use the types filter to show only ICMP, TCP, etc. and hide STP/DTP background noise."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Only return frames matching these traffic type names "
+                        "(e.g. [\"ICMP\"], [\"ICMP\",\"ARP\"]). Omit to return all frames."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "getCommandLog",
+        "description": (
+            "Read the IOS command history logged by Packet Tracer. "
+            "Optionally filter by device name and cap the number of returned entries."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "deviceName": {
+                    "type": "string",
+                    "description": "Return only entries from this device. Omit to return all devices.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500,
+                    "description": "Maximum entries to return, newest first. Defaults to 50.",
+                },
+            },
+            "required": [],
+        },
+    },
 ]
 
 TOOLS_BY_NAME: dict[str, dict] = {t["name"]: t for t in TOOLS}

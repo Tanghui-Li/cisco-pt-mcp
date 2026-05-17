@@ -213,8 +213,6 @@ configureIosDevice = function (deviceName, commands) {
   }
 };
 
-// Build a snapshot of every device + every link in the workspace, including
-// per-interface "in_use" booleans the agent uses to validate addLink choices.
 getNetwork = function () {
   try {
     var deviceCount = ipc.network().getDeviceCount();
@@ -270,7 +268,7 @@ getNetwork = function () {
           fromInterface: port1Name,
           to: device2Name,
           toInterface: port2Name,
-          type: lnk.getLinkType(),
+          type: lnk.getConnectionType(),
         });
       }
     }
@@ -289,8 +287,6 @@ getNetwork = function () {
   }
 };
 
-// Detail view of a single device. Built on top of getNetwork() so the
-// in_use semantics stay consistent.
 getDeviceInfo = function (deviceName) {
   try {
     var net = getNetwork();
@@ -388,8 +384,264 @@ removeDevice = function (deviceNames) {
   }
 };
 
-// Accepts {device, port} or [{device, port}, ...]; older {deviceName, portName}
-// shape is also tolerated for backward compatibility.
+setSimulationMode = function (toSimMode) {
+  try {
+    var sim = ipc.simulation();
+    var current = sim.isSimulationMode();
+    if (current === toSimMode) {
+      return {
+        success: true,
+        message: "Already in " + (toSimMode ? "simulation" : "realtime") + " mode",
+        mode: toSimMode ? "simulation" : "realtime",
+      };
+    }
+    sim.setSimulationMode(toSimMode);
+    return {
+      success: true,
+      message: "Switched to " + (toSimMode ? "simulation" : "realtime") + " mode",
+      mode: toSimMode ? "simulation" : "realtime",
+    };
+  } catch (error) {
+    return fail("Error setting simulation mode", error);
+  }
+};
+
+getSimulationStatus = function () {
+  try {
+    var sim = ipc.simulation();
+    var isSimMode = sim.isSimulationMode();
+    var result = { mode: isSimMode ? "simulation" : "realtime" };
+    if (isSimMode) {
+      result.currentTime = sim.getCurrentSimTime();
+      result.frameCount = sim.getFrameInstanceCount();
+      result.currentFrameIndex = sim.getCurrentFrameInstanceIndex();
+    }
+    return { success: true, result: result };
+  } catch (error) {
+    return fail("Error getting simulation status", error);
+  }
+};
+
+stepSimulation = function (direction, steps) {
+  try {
+    var sim = ipc.simulation();
+    if (!sim.isSimulationMode()) {
+      return {
+        success: false,
+        error: "Not in simulation mode. Call setSimulationMode(true) first.",
+      };
+    }
+    if (direction === "reset") {
+      sim.resetSimulation();
+      return { success: true, message: "Simulation reset" };
+    }
+    var n = steps && steps >= 1 ? Math.min(steps, 100) : 1;
+    for (var i = 0; i < n; i++) {
+      if (direction === "forward") {
+        sim.forward();
+      } else if (direction === "backward") {
+        sim.backward();
+      } else {
+        return { success: false, error: "Unknown direction: " + direction };
+      }
+    }
+    return {
+      success: true,
+      message: direction + " " + n + " step(s)",
+      currentTime: sim.getCurrentSimTime(),
+      frameCount: sim.getFrameInstanceCount(),
+    };
+  } catch (error) {
+    return fail("Error stepping simulation", error);
+  }
+};
+
+var PDU_TRAFFIC_TYPES = {
+  ICMP: 0,
+  TCP: 1,
+  UDP: 2,
+  HTTP: 17,
+  HTTPS: 18,
+  DNS: 19,
+};
+
+sendPdu = function (sourceDevice, destinationDevice) {
+  try {
+    var sim = ipc.simulation();
+    var modeEnabled = false;
+    if (!sim.isSimulationMode()) {
+      sim.setSimulationMode(true);
+      modeEnabled = true;
+    }
+    if (!ipc.network().getDevice(sourceDevice)) {
+      return { success: false, error: "Source device not found: " + sourceDevice };
+    }
+    if (!ipc.network().getDevice(destinationDevice)) {
+      return { success: false, error: "Destination device not found: " + destinationDevice };
+    }
+    var errCode = ipc.appWindow().getUserCreatedPDU().addSimplePdu(sourceDevice, destinationDevice);
+    // ADD_PDU_ERROR: 0 / falsy = success
+    var errStr = String(errCode);
+    if (errCode && errStr !== "0") {
+      return { success: false, error: "PT rejected PDU (ADD_PDU_ERROR=" + errStr + ")" };
+    }
+    return {
+      success: true,
+      message: "ICMP PDU added from " + sourceDevice + " to " + destinationDevice,
+      simulationModeEnabled: modeEnabled,
+    };
+  } catch (error) {
+    return fail("Error sending PDU", error);
+  }
+};
+
+renameDevice = function (deviceName, newName) {
+  try {
+    var device = ipc.network().getDevice(deviceName);
+    if (!device) {
+      return { success: false, error: "Device not found: " + deviceName };
+    }
+    device.setName(newName);
+    return { success: true, message: "Renamed " + deviceName + " to " + newName };
+  } catch (error) {
+    return fail("Error renaming device", error);
+  }
+};
+
+moveDevice = function (deviceName, x, y) {
+  try {
+    var device = ipc.network().getDevice(deviceName);
+    if (!device) {
+      return { success: false, error: "Device not found: " + deviceName };
+    }
+    device.moveToLocation(x, y);
+    return {
+      success: true,
+      message: "Moved " + deviceName + " to (" + x + ", " + y + ")",
+    };
+  } catch (error) {
+    return fail("Error moving device", error);
+  }
+};
+
+// Maps both numeric and C++ enum-string forms of eTrafficType to readable names.
+// PT's JS host may expose the enum as "0" or as "eTrafficType_Icmp" — handle both.
+var TRAFFIC_TYPE_NAMES = {
+  "0": "ICMP",  "eTrafficType_Icmp": "ICMP",
+  "1": "TCP",   "eTrafficType_Tcp": "TCP",
+  "2": "UDP",   "eTrafficType_Udp": "UDP",
+  "3": "RIPv1", "eTrafficType_RipV1": "RIPv1",
+  "4": "RIPv2", "eTrafficType_RipV2": "RIPv2",
+  "5": "ARP",   "eTrafficType_Arp": "ARP",
+  "6": "CDP",   "eTrafficType_Cdp": "CDP",
+  "7": "DHCP",  "eTrafficType_Dhcp": "DHCP",
+  "11": "STP",  "eTrafficType_Stp": "STP",
+  "12": "OSPF", "eTrafficType_Ospf": "OSPF",
+  "13": "DTP",  "eTrafficType_Dtp": "DTP",
+  "17": "HTTP", "eTrafficType_Http": "HTTP",
+  "18": "HTTPS","eTrafficType_Https": "HTTPS",
+  "19": "DNS",  "eTrafficType_Dns": "DNS",
+  "36": "BGP",  "eTrafficType_Bgp": "BGP",
+  "1000": "Custom", "eTrafficType_Custom": "Custom",
+};
+
+getPduResults = function (types) {
+  try {
+    var sim = ipc.simulation();
+    if (!sim.isSimulationMode()) {
+      return { success: false, error: "Not in simulation mode. Call setSimulationMode(true) first." };
+    }
+
+    var typeFilter = null;
+    if (Array.isArray(types) && types.length > 0) {
+      typeFilter = {};
+      for (var t = 0; t < types.length; t++) typeFilter[types[t].toUpperCase()] = true;
+    }
+
+    var total = sim.getFrameInstanceCount();
+    var frames = [];
+    for (var i = 0; i < total; i++) {
+      var fi = sim.getFrameInstanceAt(i);
+      if (!fi) continue;
+
+      var rawType = String(fi.getUserTrafficType());
+      var typeName = TRAFFIC_TYPE_NAMES[rawType] || rawType;
+
+      if (typeFilter && !typeFilter[typeName.toUpperCase()]) continue;
+
+      var status = "unknown";
+      if (fi.isFrameAccepted())          status = "accepted";
+      else if (fi.isFrameDropped())      status = "dropped";
+      else if (fi.isFrameNotForwarded()) status = "not_forwarded";
+      else if (fi.isFrameUnexpected())   status = "unexpected";
+      else if (fi.isFrameCollidedOnLink() || fi.isFrameCollidedAtDevice()) status = "collision";
+      else if (fi.isFrameBuffered())     status = "buffered";
+      else if (fi.isFrameOnTransit())    status = "in_transit";
+      else if (fi.isFrameSent())         status = "sent";
+
+      frames.push({
+        index: i,
+        source: fi.getSourceString(),
+        destination: fi.getDestinationString(),
+        trafficType: typeName,
+        status: status,
+      });
+    }
+    return {
+      success: true,
+      result: { totalFrames: total, shown: frames.length, frames: frames },
+    };
+  } catch (error) {
+    return fail("Error getting PDU results", error);
+  }
+};
+
+getCommandLog = function (deviceName, limit) {
+  try {
+    var log = ipc.commandLog();
+    var total = log.getEntryCount();
+    var cap = limit && limit > 0 ? Math.min(limit, 500) : 50;
+    var entries = [];
+
+    for (var i = total - 1; i >= 0 && entries.length < cap; i--) {
+      var entry = log.getEntryAt(i);
+      if (!entry) continue;
+      var dev = entry.getDeviceName();
+      if (deviceName && dev !== deviceName) continue;
+      entries.push({
+        timestamp: entry.getTimeToString(),
+        device: dev,
+        prompt: entry.getPrompt(),
+        command: entry.getCommand(),
+        resolvedCommand: entry.getResolvedCommand(),
+      });
+    }
+
+    return {
+      success: true,
+      result: { totalEntries: total, returned: entries.length, entries: entries },
+    };
+  } catch (error) {
+    return fail("Error getting command log", error);
+  }
+};
+
+setPower = function (deviceName, power) {
+  try {
+    var device = ipc.network().getDevice(deviceName);
+    if (!device) {
+      return { success: false, error: "Device not found: " + deviceName };
+    }
+    device.setPower(power);
+    return {
+      success: true,
+      message: deviceName + " powered " + (power ? "on" : "off"),
+    };
+  } catch (error) {
+    return fail("Error setting device power", error);
+  }
+};
+
 removeLink = function (links) {
   try {
     var linksToRemove = [];

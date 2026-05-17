@@ -20,6 +20,10 @@ from .tools import TOOLS, TOOLS_BY_NAME
 log = logging.getLogger(__name__)
 
 
+class MCPRequestError(ValueError):
+    """Raised when an MCP client sends malformed tool arguments."""
+
+
 def _to_text_content(payload: Any) -> list[mcp_types.TextContent]:
     """Wrap a JSON-serializable payload as a single TextContent block."""
     if isinstance(payload, str):
@@ -30,6 +34,15 @@ def _to_text_content(payload: Any) -> list[mcp_types.TextContent]:
         except (TypeError, ValueError):
             text = str(payload)
     return [mcp_types.TextContent(type="text", text=text)]
+
+
+def _normalize_tool_arguments(arguments: Any) -> dict[str, Any]:
+    """Ensure MCP tool arguments arrive as a JSON object."""
+    if arguments is None:
+        return {}
+    if not isinstance(arguments, dict):
+        raise MCPRequestError("tool arguments must be a JSON object")
+    return arguments
 
 
 def build_server(bridge: PTBridge) -> Server:
@@ -60,9 +73,12 @@ def build_server(bridge: PTBridge) -> Server:
             except RuntimeError as exc:
                 return _to_text_content({"success": False, "error": str(exc)})
 
-        args = arguments or {}
         try:
+            args = _normalize_tool_arguments(arguments)
             result = await bridge.call_tool(name, args)
+        except MCPRequestError as exc:
+            log.warning("tool %s rejected invalid arguments: %s", name, exc)
+            return _to_text_content({"success": False, "error": str(exc)})
         except Exception as exc:  # noqa: BLE001
             log.exception("tool %s failed", name)
             return _to_text_content({"success": False, "error": str(exc)})
