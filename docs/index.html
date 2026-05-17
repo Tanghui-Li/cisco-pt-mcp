@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cisco-pt-mcp — AI control for Cisco Packet Tracer</title>
+  <meta name="description" content="MCP server that lets any AI client drive a running Cisco Packet Tracer instance. Build topologies, configure devices, run simulations.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-logo" href="#">
+      <span class="logo-icon">⬡</span>
+      <span>cisco-pt-mcp</span>
+    </a>
+    <div class="nav-links">
+      <a href="https://github.com/muhammadbalawal/cisco-pt-mcp" class="nav-link" target="_blank">GitHub</a>
+      <a href="https://pypi.org/project/cisco-pt-mcp/" class="nav-link" target="_blank">PyPI</a>
+      <a href="#install" class="btn btn-primary">Install</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="container">
+    <div class="badge">MCP Server &nbsp;·&nbsp; v0.1.2</div>
+    <h1 class="hero-title">
+      AI control for<br>
+      <span class="accent">Cisco Packet Tracer</span>
+    </h1>
+    <p class="hero-subtitle">
+      Let any MCP-aware client — Claude, Cursor, VS Code — drive a running
+      Packet Tracer instance. Build topologies, configure devices, run simulations.
+    </p>
+    <div class="hero-cta">
+      <a href="#install" class="btn btn-primary btn-lg">Get Started</a>
+      <a href="https://github.com/muhammadbalawal/cisco-pt-mcp" class="btn btn-ghost btn-lg" target="_blank">View on GitHub</a>
+    </div>
+    <!-- Drop your video/iframe here later. The placeholder disappears when a child iframe/video is present. -->
+    <div class="video-wrap">
+      <div class="video-placeholder-inner">
+        <div class="play-icon">▶</div>
+        <p>Demo video coming soon</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section class="section section-alt" id="how-it-works">
+  <div class="container">
+    <h2 class="section-title">How it works</h2>
+    <p class="section-subtitle">Three steps from zero to AI-driven networking labs.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <h3>Install the server</h3>
+        <p>Register cisco-pt-mcp with your MCP client in one line using <code style="color:var(--accent);font-family:var(--font-mono);font-size:13px">uvx</code> — no venv or cloning required.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <h3>Install the extension</h3>
+        <p>Drop <code style="color:var(--accent);font-family:var(--font-mono);font-size:13px">cisco-pt-mcp.pts</code> into Packet Tracer's Extension Manager and restart. A bridge window appears in the Extensions menu.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <h3>Ask your AI</h3>
+        <p>"Build a star topology with 3 PCs and a switch, then ping between them." Watch it happen live in Packet Tracer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TOOLS ── -->
+<section class="section" id="tools">
+  <div class="container">
+    <h2 class="section-title">9 tools exposed</h2>
+    <p class="section-subtitle">Everything the model needs to build and inspect a full Packet Tracer lab.</p>
+    <div class="tools-grid">
+      <div class="tool-card">
+        <div class="tool-name">addDevice</div>
+        <div class="tool-desc">Drop a router, switch, or PC onto the canvas at a given position.</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">addModule</div>
+        <div class="tool-desc">Install an interface module into a device slot (e.g. add a WIC card to a router).</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">addLink</div>
+        <div class="tool-desc">Connect two devices with a cable — copper straight-through, crossover, serial, fiber, and more.</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">removeDevice</div>
+        <div class="tool-desc">Delete one or more devices from the topology by name.</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">removeLink</div>
+        <div class="tool-desc">Delete one or more cables identified by device and port name.</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">configurePcIp</div>
+        <div class="tool-desc">Set static IP, subnet mask, default gateway, and DNS — or enable DHCP — on a PC.</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">configureIosDevice</div>
+        <div class="tool-desc">Run any IOS CLI commands on a router or switch. Multi-line configs supported.</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">getNetwork</div>
+        <div class="tool-desc">Snapshot of all devices, their interfaces, and all cable connections in the current workspace.</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">getDeviceInfo</div>
+        <div class="tool-desc">Detailed view of a single device — model, interfaces, and connected neighbours.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── INSTALL ── -->
+<section class="section section-alt" id="install">
+  <div class="container">
+    <h2 class="section-title">Install</h2>
+
+    <!-- Step 1: Server -->
+    <div class="install-step">
+      <h3>1 — MCP Server</h3>
+      <p>
+        First, <a href="https://docs.astral.sh/uv/getting-started/installation/" style="color:var(--accent)" target="_blank">install uv</a> if you don't have it (one command on any platform).
+        Then register the server with your MCP client:
+      </p>
+      <div class="tabs">
+        <div class="tab-list">
+          <button class="tab-btn active" data-tab="claude-code">Claude Code</button>
+          <button class="tab-btn" data-tab="claude-desktop">Claude Desktop</button>
+          <button class="tab-btn" data-tab="cursor">Cursor</button>
+          <button class="tab-btn" data-tab="vscode">VS Code</button>
+          <button class="tab-btn" data-tab="codex">Codex CLI</button>
+          <button class="tab-btn" data-tab="backboard">Backboard</button>
+        </div>
+        <div class="tab-panels">
+
+          <div class="tab-panel active" data-panel="claude-code">
+            <div class="code-label">Terminal</div>
+            <div class="code-block">
+              <pre>claude mcp add cisco-pt-mcp --scope user -- uvx cisco-pt-mcp</pre>
+              <button class="copy-btn">Copy</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="claude-desktop">
+            <div class="code-label">%APPDATA%\Claude\claude_desktop_config.json</div>
+            <div class="code-block">
+              <pre>{
+  "mcpServers": {
+    "cisco-pt-mcp": { "command": "uvx", "args": ["cisco-pt-mcp"] }
+  }
+}</pre>
+              <button class="copy-btn">Copy</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="cursor">
+            <div class="code-label">%USERPROFILE%\.cursor\mcp.json</div>
+            <div class="code-block">
+              <pre>{
+  "mcpServers": {
+    "cisco-pt-mcp": { "command": "uvx", "args": ["cisco-pt-mcp"] }
+  }
+}</pre>
+              <button class="copy-btn">Copy</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="vscode">
+            <div class="code-label">.vscode/mcp.json</div>
+            <div class="code-block">
+              <pre>{
+  "servers": {
+    "cisco-pt-mcp": { "command": "uvx", "args": ["cisco-pt-mcp"] }
+  }
+}</pre>
+              <button class="copy-btn">Copy</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="codex">
+            <div class="code-label">%USERPROFILE%\.codex\config.toml</div>
+            <div class="code-block">
+              <pre>[mcp_servers.cisco-pt-mcp]
+command = "uvx"
+args = ["cisco-pt-mcp"]</pre>
+              <button class="copy-btn">Copy</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="backboard">
+            <div class="code-label">Terminal</div>
+            <div class="code-block">
+              <pre>backboard config add-mcp "{\"name\": \"cisco-pt-mcp\", \"command\": \"uvx\", \"args\": [\"cisco-pt-mcp\"]}"</pre>
+              <button class="copy-btn">Copy</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Extension -->
+    <div class="install-step">
+      <h3>2 — Packet Tracer Extension</h3>
+      <p>Download <a href="https://github.com/muhammadbalawal/cisco-pt-mcp/raw/main/extension/cisco-pt-mcp.pts" style="color:var(--accent)" target="_blank">cisco-pt-mcp.pts</a> then install it through Packet Tracer's Extension Manager:</p>
+      <ol>
+        <li>Open Packet Tracer.</li>
+        <li>Go to <strong>Extensions → Extension Manager → Install Extension…</strong></li>
+        <li>Select the downloaded <strong>cisco-pt-mcp.pts</strong> file.</li>
+        <li>Restart Packet Tracer when prompted.</li>
+        <li>Click <strong>Extensions → Packet Tracer MCP</strong> to open the bridge window.</li>
+      </ol>
+    </div>
+
+    <!-- Step 3: Run -->
+    <div class="install-step">
+      <h3>3 — Run</h3>
+      <p>Launch Packet Tracer and open the bridge window. Then start your MCP client — the bridge status pill flips to <span style="color:var(--accent);font-family:var(--font-mono);font-size:13px">connected</span> within a second. Start prompting.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="https://github.com/muhammadbalawal/cisco-pt-mcp" target="_blank">GitHub</a>
+      <a href="https://pypi.org/project/cisco-pt-mcp/" target="_blank">PyPI</a>
+      <a href="https://github.com/muhammadbalawal/cisco-pt-mcp/blob/main/LICENSE" target="_blank">MIT License</a>
+      <a href="https://github.com/muhammadbalawal/cisco-pt-mcp/issues" target="_blank">Issues</a>
+    </div>
+    <p class="footer-copy">cisco-pt-mcp is not affiliated with Cisco Systems.</p>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
