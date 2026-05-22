@@ -1,9 +1,12 @@
 // User-callable functions exposed by the cisco-pt-mcp bridge.
 // Each returns { success: bool, ... } and is invoked via $se('runCode', 'return <fn>(<args>);').
 
-var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.12";
+var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.13";
 var CISCO_PT_MCP_BRIDGE_HOST = "127.0.0.1";
 var CISCO_PT_MCP_BRIDGE_PORT = 7531;
+var CISCO_PT_MCP_IOT_AUTOMATION_RULES = {};
+var CISCO_PT_MCP_IOT_AUTOMATION_LOG = [];
+var CISCO_PT_MCP_IOT_AUTOMATION_LOG_LIMIT = 80;
 
 function fail(prefix, err) {
   var msg = (err && (err.message || String(err))) || "unknown error";
@@ -135,6 +138,125 @@ function listCustomVars(device) {
   return vars;
 }
 
+function numericValue(value) {
+  if (value === null || value === undefined) return NaN;
+  if (typeof value === "number") return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  var text = String(value).trim();
+  if (!text) return NaN;
+  var lowered = text.toLowerCase();
+  if (lowered === "true" || lowered === "on" || lowered === "open" || lowered === "high") return 1;
+  if (lowered === "false" || lowered === "off" || lowered === "closed" || lowered === "low") return 0;
+  var match = text.match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : Number(text);
+}
+
+function getDevicePosition(device) {
+  if (!device) return null;
+  try {
+    if (isFn(device, "getCenterXCoordinate") && isFn(device, "getCenterYCoordinate")) {
+      return {
+        x: Number(device.getCenterXCoordinate()),
+        y: Number(device.getCenterYCoordinate()),
+        source: "center",
+      };
+    }
+  } catch (e) {}
+  try {
+    if (isFn(device, "getXCoordinate") && isFn(device, "getYCoordinate")) {
+      return {
+        x: Number(device.getXCoordinate()),
+        y: Number(device.getYCoordinate()),
+        source: "logical",
+      };
+    }
+  } catch (e2) {}
+  return null;
+}
+
+function getActiveEnvironment() {
+  try {
+    var workspace = ipc.appWindow().getActiveWorkspace();
+    if (workspace && isFn(workspace, "getRootPhysicalObject")) {
+      var root = workspace.getRootPhysicalObject();
+      if (root && isFn(root, "getEnvironment")) return root.getEnvironment();
+    }
+    if (workspace && isFn(workspace, "getCurrentPhysicalObject")) {
+      var current = workspace.getCurrentPhysicalObject();
+      if (current && isFn(current, "getEnvironment")) return current.getEnvironment();
+    }
+  } catch (e) {}
+  return null;
+}
+
+function readEnvironmentValueByKey(key) {
+  var env = getActiveEnvironment();
+  if (!env) {
+    return { found: false, error: "Active physical environment is not available" };
+  }
+  var envKey = String(key);
+  try {
+    if (isFn(env, "getMetricValue")) {
+      return { found: true, value: env.getMetricValue(envKey), key: envKey, source: "environmentMetric" };
+    }
+  } catch (e) {}
+  try {
+    if (isFn(env, "getEnvironmentValue")) {
+      return { found: true, value: env.getEnvironmentValue(envKey), key: envKey, source: "environmentValue" };
+    }
+  } catch (e2) {}
+  try {
+    if (isFn(env, "getValueWithUnit")) {
+      return { found: true, value: env.getValueWithUnit(envKey), key: envKey, source: "environmentValueWithUnit" };
+    }
+  } catch (e3) {}
+  return { found: false, error: "Environment key is not readable: " + envKey };
+}
+
+function readFirstDeviceAttribute(device, cond) {
+  var names = [];
+  if (cond.attributeName) names.push(String(cond.attributeName));
+  if (Array.isArray(cond.attributeNames)) {
+    for (var i = 0; i < cond.attributeNames.length; i++) {
+      if (cond.attributeNames[i]) names.push(String(cond.attributeNames[i]));
+    }
+  }
+  for (var j = 0; j < names.length; j++) {
+    try {
+      if (isFn(device, "getDeviceExternalAttributeValue")) {
+        var value = device.getDeviceExternalAttributeValue(names[j]);
+        if (value !== undefined && value !== null && String(value) !== "") {
+          return { found: true, value: value, source: "externalAttribute", attributeName: names[j] };
+        }
+      }
+    } catch (e) {}
+  }
+  return { found: false };
+}
+
+function readFirstEnvironmentValue(cond) {
+  var keys = [];
+  if (cond.environmentKey) keys.push(String(cond.environmentKey));
+  if (Array.isArray(cond.environmentKeys)) {
+    for (var i = 0; i < cond.environmentKeys.length; i++) {
+      if (cond.environmentKeys[i]) keys.push(String(cond.environmentKeys[i]));
+    }
+  }
+  for (var j = 0; j < keys.length; j++) {
+    var result = readEnvironmentValueByKey(keys[j]);
+    if (result.found) return result;
+  }
+  return { found: false, error: keys.length > 0 ? "None of the environment keys were readable" : "" };
+}
+
+function logIotAutomationEvent(entry) {
+  entry.time = (new Date()).toISOString();
+  CISCO_PT_MCP_IOT_AUTOMATION_LOG.push(entry);
+  while (CISCO_PT_MCP_IOT_AUTOMATION_LOG.length > CISCO_PT_MCP_IOT_AUTOMATION_LOG_LIMIT) {
+    CISCO_PT_MCP_IOT_AUTOMATION_LOG.shift();
+  }
+}
+
 function applyIotControlOptions(deviceName, options) {
   var device = getDeviceByName(deviceName);
   if (!device) {
@@ -248,14 +370,83 @@ function evaluateIotCondition(condition) {
     return { met: true, actualValue: true, expectedValue: true, operator: operator, source: "always" };
   }
 
+  if (operator === "all" || operator === "and" || operator === "any" || operator === "or") {
+    var conditions = Array.isArray(cond.conditions) ? cond.conditions : [];
+    var childResults = [];
+    var anyMode = operator === "any" || operator === "or";
+    var met = anyMode ? false : true;
+    if (conditions.length === 0) {
+      return { met: false, error: "Composite condition requires a non-empty conditions array", operator: operator };
+    }
+    for (var c = 0; c < conditions.length; c++) {
+      var child = evaluateIotCondition(conditions[c]);
+      childResults.push(child);
+      if (anyMode && child.met) met = true;
+      if (!anyMode && !child.met) met = false;
+    }
+    return {
+      met: met,
+      operator: operator,
+      conditions: childResults,
+    };
+  }
+
+  if (operator === "not") {
+    var nested = evaluateIotCondition(cond.condition || {});
+    return {
+      met: !nested.met,
+      operator: operator,
+      condition: nested,
+    };
+  }
+
+  if (operator === "near" || operator === "within" || operator === "distance<=") {
+    var sourceDevice = getDeviceByName(cond.deviceName);
+    var targetDeviceName = cond.targetDeviceName || cond.nearDeviceName;
+    var targetDevice = targetDeviceName ? getDeviceByName(targetDeviceName) : null;
+    if (!sourceDevice || !targetDevice) {
+      return {
+        met: false,
+        error: "Near condition requires existing deviceName and targetDeviceName",
+        operator: operator,
+      };
+    }
+    var sourcePos = getDevicePosition(sourceDevice);
+    var targetPos = getDevicePosition(targetDevice);
+    if (!sourcePos || !targetPos) {
+      return {
+        met: false,
+        error: "Could not read logical coordinates for near condition",
+        operator: operator,
+      };
+    }
+    var dx = sourcePos.x - targetPos.x;
+    var dy = sourcePos.y - targetPos.y;
+    var distance = Math.sqrt(dx * dx + dy * dy);
+    var maxDistance = Number(cond.maxDistance !== undefined ? cond.maxDistance : cond.value);
+    if (!isFinite(maxDistance) || maxDistance <= 0) maxDistance = 120;
+    return {
+      met: distance <= maxDistance,
+      actualValue: distance,
+      expectedValue: maxDistance,
+      operator: operator,
+      source: "logicalDistance",
+      deviceName: cond.deviceName,
+      targetDeviceName: targetDeviceName,
+      sourcePosition: sourcePos,
+      targetPosition: targetPos,
+    };
+  }
+
   if (actual === undefined && cond.deviceName) {
     var device = getDeviceByName(cond.deviceName);
     if (!device) {
       return { met: false, error: `Condition device ${cond.deviceName} not found`, operator: operator };
     }
-    if (cond.attributeName && isFn(device, "getDeviceExternalAttributeValue")) {
-      actual = device.getDeviceExternalAttributeValue(String(cond.attributeName));
-      source = "externalAttribute";
+    var attributeResult = readFirstDeviceAttribute(device, cond);
+    if (attributeResult.found) {
+      actual = attributeResult.value;
+      source = attributeResult.source;
     } else if (cond.useSensorState === true && isFn(device, "getSensorState")) {
       actual = device.getSensorState();
       source = "sensorState";
@@ -268,9 +459,23 @@ function evaluateIotCondition(condition) {
     }
   }
 
+  if (actual === undefined && (cond.environmentKey || Array.isArray(cond.environmentKeys))) {
+    var envResult = readFirstEnvironmentValue(cond);
+    if (envResult.found) {
+      actual = envResult.value;
+      source = envResult.source;
+    } else {
+      return {
+        met: false,
+        error: envResult.error || "No readable environment value",
+        operator: operator,
+      };
+    }
+  }
+
   var expected = cond.value;
-  var actualNumber = Number(actual);
-  var expectedNumber = Number(expected);
+  var actualNumber = numericValue(actual);
+  var expectedNumber = numericValue(expected);
   var met = false;
 
   if (operator === ">" || operator === "gt") met = actualNumber > expectedNumber;
@@ -306,6 +511,175 @@ function defaultIotAutomationActions(ruleName) {
     }];
   }
   return [];
+}
+
+function defaultIotAutomationCondition(ruleName) {
+  if (ruleName === "wind-close-window") {
+    return {
+      operator: "any",
+      conditions: [
+        {
+          environmentKeys: ["Wind", "Wind Speed", "WindSpeed", "wind", "wind speed"],
+          operator: ">=",
+          value: 20,
+        },
+        {
+          deviceName: "Wind_Detector",
+          attributeNames: ["Wind", "Wind Speed", "WindSpeed", "wind", "wind speed", "speed", "Speed", "level", "Level", "value", "Value"],
+          useSensorState: true,
+          operator: ">=",
+          value: 1,
+        },
+      ],
+    };
+  }
+  if (ruleName === "rfid-open-door") {
+    return {
+      deviceName: "RFID-CARD-ADMIN",
+      targetDeviceName: "RFID-ACCESS",
+      operator: "near",
+      maxDistance: 120,
+    };
+  }
+  return { operator: "always" };
+}
+
+function resolveIotAutomationInputs(ruleName, condition, actions) {
+  var normalizedRule = String(ruleName || "custom").toLowerCase();
+  return {
+    ruleName: normalizedRule,
+    condition: condition || defaultIotAutomationCondition(normalizedRule),
+    actions: Array.isArray(actions) && actions.length > 0
+      ? actions
+      : defaultIotAutomationActions(normalizedRule),
+  };
+}
+
+function executeIotAutomationRule(ruleName, condition, actions, dryRun) {
+  var resolved = resolveIotAutomationInputs(ruleName, condition, actions);
+  var conditionResult = evaluateIotCondition(resolved.condition || { operator: "always" });
+
+  if (!conditionResult.met) {
+    return {
+      success: true,
+      ruleName: resolved.ruleName,
+      condition: conditionResult,
+      actionsApplied: [],
+      message: "Condition was not met; no IoT action applied",
+    };
+  }
+
+  if (dryRun === true) {
+    return {
+      success: true,
+      ruleName: resolved.ruleName,
+      condition: conditionResult,
+      dryRun: true,
+      plannedActions: resolved.actions,
+      actionsApplied: [],
+    };
+  }
+
+  var actionResults = [];
+  for (var i = 0; i < resolved.actions.length; i++) {
+    var action = resolved.actions[i] || {};
+    if (!action.deviceName) {
+      actionResults.push({ success: false, error: "Action missing deviceName", actionIndex: i });
+      continue;
+    }
+    var result = applyIotControlOptions(action.deviceName, action);
+    result.deviceName = action.deviceName;
+    result.actionIndex = i;
+    actionResults.push(result);
+    if (!result.success) {
+      return {
+        success: false,
+        ruleName: resolved.ruleName,
+        condition: conditionResult,
+        actionsApplied: actionResults,
+        error: result.error,
+      };
+    }
+  }
+
+  return {
+    success: true,
+    ruleName: resolved.ruleName,
+    condition: conditionResult,
+    actionsApplied: actionResults,
+    message: "IoT automation rule executed",
+  };
+}
+
+function iotAutomationTick(ruleName) {
+  var rule = CISCO_PT_MCP_IOT_AUTOMATION_RULES[ruleName];
+  if (!rule || !rule.enabled) return;
+  var conditionResult = evaluateIotCondition(rule.condition || { operator: "always" });
+  var shouldApply = !!conditionResult.met;
+  if (rule.triggerMode === "rising" && rule.lastMet === true) shouldApply = false;
+  if (rule.triggerMode === "once" && rule.triggerCount > 0) shouldApply = false;
+
+  var actionResults = [];
+  var error = "";
+  if (shouldApply) {
+    for (var i = 0; i < rule.actions.length; i++) {
+      var action = rule.actions[i] || {};
+      if (!action.deviceName) {
+        actionResults.push({ success: false, error: "Action missing deviceName", actionIndex: i });
+        error = "Action missing deviceName";
+        break;
+      }
+      var result = applyIotControlOptions(action.deviceName, action);
+      result.deviceName = action.deviceName;
+      result.actionIndex = i;
+      actionResults.push(result);
+      if (!result.success) {
+        error = result.error || "Action failed";
+        break;
+      }
+    }
+    if (!error) rule.triggerCount += 1;
+  }
+
+  rule.tickCount += 1;
+  rule.lastMet = !!conditionResult.met;
+  rule.lastRunAt = (new Date()).toISOString();
+  rule.lastResult = {
+    success: error ? false : true,
+    ruleName: ruleName,
+    condition: conditionResult,
+    actionsApplied: actionResults,
+    skippedByTriggerMode: conditionResult.met && !shouldApply,
+    error: error,
+  };
+  logIotAutomationEvent({
+    ruleName: ruleName,
+    conditionMet: !!conditionResult.met,
+    actionCount: actionResults.length,
+    skippedByTriggerMode: conditionResult.met && !shouldApply,
+    error: error,
+  });
+
+  if (rule.triggerMode === "once" && rule.triggerCount > 0) {
+    stopIotAutomation(ruleName);
+  }
+}
+
+function automationRuleSnapshot(rule) {
+  if (!rule) return null;
+  return {
+    ruleName: rule.ruleName,
+    enabled: rule.enabled,
+    intervalMs: rule.intervalMs,
+    triggerMode: rule.triggerMode,
+    tickCount: rule.tickCount,
+    triggerCount: rule.triggerCount,
+    lastMet: rule.lastMet,
+    lastRunAt: rule.lastRunAt,
+    lastResult: rule.lastResult,
+    condition: rule.condition,
+    actions: rule.actions,
+  };
 }
 
 var WIRELESS_AUTH_TYPES = {
@@ -375,6 +749,7 @@ getBridgeInfo = function () {
       "home-router",
       "iot",
       "iot-automation",
+      "environment",
       "topology-audit",
     ],
   };
@@ -1638,64 +2013,233 @@ inspectIotDevice = function (deviceName, attributeNames) {
 
 runIotAutomation = function (ruleName, condition, actions, dryRun) {
   try {
-    var normalizedRule = String(ruleName || "custom").toLowerCase();
-    var conditionResult = evaluateIotCondition(condition || { operator: "always" });
-    var plannedActions = Array.isArray(actions) && actions.length > 0
-      ? actions
-      : defaultIotAutomationActions(normalizedRule);
+    return executeIotAutomationRule(ruleName, condition, actions, dryRun);
+  } catch (error) {
+    return fail("Error running IoT automation", error);
+  }
+};
 
-    if (!conditionResult.met) {
+startIotAutomation = function (ruleName, condition, actions, intervalMs, triggerMode, runImmediately) {
+  try {
+    var resolved = resolveIotAutomationInputs(ruleName, condition, actions);
+    if (!Array.isArray(resolved.actions) || resolved.actions.length === 0) {
       return {
-        success: true,
-        ruleName: normalizedRule,
-        condition: conditionResult,
-        actionsApplied: [],
-        message: "Condition was not met; no IoT action applied",
+        success: false,
+        error: "No IoT automation actions were provided and no built-in actions matched the rule name",
       };
     }
 
-    var actionResults = [];
-    if (dryRun === true) {
-      return {
-        success: true,
-        ruleName: normalizedRule,
-        condition: conditionResult,
-        dryRun: true,
-        plannedActions: plannedActions,
-        actionsApplied: [],
-      };
+    var normalizedMode = String(triggerMode || "continuous").toLowerCase();
+    if (normalizedMode !== "continuous" && normalizedMode !== "rising" && normalizedMode !== "once") {
+      return { success: false, error: "triggerMode must be continuous, rising, or once" };
     }
 
-    for (var i = 0; i < plannedActions.length; i++) {
-      var action = plannedActions[i] || {};
-      if (!action.deviceName) {
-        actionResults.push({ success: false, error: "Action missing deviceName", actionIndex: i });
-        continue;
-      }
-      var result = applyIotControlOptions(action.deviceName, action);
-      result.deviceName = action.deviceName;
-      result.actionIndex = i;
-      actionResults.push(result);
-      if (!result.success) {
-        return {
-          success: false,
-          ruleName: normalizedRule,
-          condition: conditionResult,
-          actionsApplied: actionResults,
-          error: result.error,
-        };
-      }
+    var normalizedInterval = Number(intervalMs || 1000);
+    if (!isFinite(normalizedInterval) || normalizedInterval < 200) normalizedInterval = 1000;
+    if (normalizedInterval > 60000) normalizedInterval = 60000;
+
+    stopIotAutomation(resolved.ruleName);
+
+    var rule = {
+      ruleName: resolved.ruleName,
+      condition: resolved.condition,
+      actions: resolved.actions,
+      intervalMs: normalizedInterval,
+      triggerMode: normalizedMode,
+      enabled: true,
+      tickCount: 0,
+      triggerCount: 0,
+      lastMet: false,
+      lastRunAt: null,
+      lastResult: null,
+      timerId: null,
+    };
+    CISCO_PT_MCP_IOT_AUTOMATION_RULES[resolved.ruleName] = rule;
+
+    rule.timerId = setInterval(function () {
+      iotAutomationTick(resolved.ruleName);
+    }, normalizedInterval);
+
+    if (runImmediately !== false) {
+      iotAutomationTick(resolved.ruleName);
     }
 
     return {
       success: true,
-      ruleName: normalizedRule,
-      condition: conditionResult,
-      actionsApplied: actionResults,
-      message: "IoT automation rule executed",
+      message: "IoT automation rule started",
+      rule: automationRuleSnapshot(rule),
     };
   } catch (error) {
-    return fail("Error running IoT automation", error);
+    return fail("Error starting IoT automation", error);
+  }
+};
+
+stopIotAutomation = function (ruleName) {
+  try {
+    var normalizedRule = String(ruleName || "all").toLowerCase();
+    var stopped = [];
+    var names = [];
+    if (normalizedRule === "all") {
+      for (var name in CISCO_PT_MCP_IOT_AUTOMATION_RULES) {
+        if (CISCO_PT_MCP_IOT_AUTOMATION_RULES.hasOwnProperty(name)) names.push(name);
+      }
+    } else {
+      names.push(normalizedRule);
+    }
+
+    for (var i = 0; i < names.length; i++) {
+      var rule = CISCO_PT_MCP_IOT_AUTOMATION_RULES[names[i]];
+      if (!rule) continue;
+      if (rule.timerId !== null && rule.timerId !== undefined) {
+        clearInterval(rule.timerId);
+      }
+      rule.enabled = false;
+      rule.timerId = null;
+      stopped.push(names[i]);
+    }
+
+    return {
+      success: true,
+      stopped: stopped,
+    };
+  } catch (error) {
+    return fail("Error stopping IoT automation", error);
+  }
+};
+
+getIotAutomationStatus = function (ruleName) {
+  try {
+    var normalizedRule = ruleName ? String(ruleName).toLowerCase() : "";
+    var rules = {};
+    for (var name in CISCO_PT_MCP_IOT_AUTOMATION_RULES) {
+      if (!CISCO_PT_MCP_IOT_AUTOMATION_RULES.hasOwnProperty(name)) continue;
+      if (normalizedRule && name !== normalizedRule) continue;
+      rules[name] = automationRuleSnapshot(CISCO_PT_MCP_IOT_AUTOMATION_RULES[name]);
+    }
+    return {
+      success: true,
+      rules: rules,
+      recentEvents: CISCO_PT_MCP_IOT_AUTOMATION_LOG.slice(-20),
+    };
+  } catch (error) {
+    return fail("Error reading IoT automation status", error);
+  }
+};
+
+inspectEnvironment = function (environmentKeys) {
+  try {
+    var env = getActiveEnvironment();
+    if (!env) {
+      return { success: false, error: "Active physical environment is not available" };
+    }
+    var keys = [];
+    try {
+      if (isFn(env, "getEnvironmentKeys")) {
+        var rawKeys = env.getEnvironmentKeys();
+        for (var i = 0; i < rawKeys.length; i++) keys.push(String(rawKeys[i]));
+      }
+    } catch (e) {}
+
+    var requested = {};
+    var requestedKeys = Array.isArray(environmentKeys) && environmentKeys.length > 0 ? environmentKeys : keys;
+    for (var j = 0; j < requestedKeys.length; j++) {
+      var key = String(requestedKeys[j]);
+      var item = {};
+      try {
+        if (isFn(env, "getMetricValue")) item.metricValue = env.getMetricValue(key);
+      } catch (e2) {}
+      try {
+        if (isFn(env, "getEnvironmentValue")) item.value = env.getEnvironmentValue(key);
+      } catch (e3) {}
+      try {
+        if (isFn(env, "getValueWithUnit")) item.valueWithUnit = String(env.getValueWithUnit(key));
+      } catch (e4) {}
+      try {
+        if (isFn(env, "getUnit")) item.unit = String(env.getUnit(key));
+      } catch (e5) {}
+      try {
+        if (isFn(env, "getEnvironment")) {
+          var options = env.getEnvironment(key);
+          if (options) {
+            if (isFn(options, "getName")) item.name = String(options.getName());
+            if (isFn(options, "getID")) item.id = String(options.getID());
+            if (isFn(options, "getCategory")) item.category = String(options.getCategory());
+            if (isFn(options, "getValue")) item.optionValue = options.getValue();
+            if (isFn(options, "getManualAdjustment")) item.manualAdjustment = options.getManualAdjustment();
+            if (isFn(options, "isActive")) item.active = options.isActive();
+          }
+        }
+      } catch (e6) {}
+      requested[key] = item;
+    }
+
+    return {
+      success: true,
+      environmentKeys: keys,
+      requested: requested,
+    };
+  } catch (error) {
+    return fail("Error inspecting environment", error);
+  }
+};
+
+configureEnvironment = function (environmentKey, value, manualAdjustment, active) {
+  try {
+    var env = getActiveEnvironment();
+    if (!env) {
+      return { success: false, error: "Active physical environment is not available" };
+    }
+    if (!environmentKey) {
+      return { success: false, error: "environmentKey is required" };
+    }
+
+    var key = String(environmentKey);
+    var applied = [];
+    var options = null;
+    try {
+      if (isFn(env, "getEnvironment")) options = env.getEnvironment(key);
+    } catch (e) {}
+    if (!options) {
+      return { success: false, error: "Environment key is not available: " + key };
+    }
+
+    if (value !== undefined && value !== null) {
+      if (!isFn(options, "setValue")) {
+        return { success: false, error: "setValue is not supported for environment key " + key };
+      }
+      options.setValue(Number(value));
+      applied.push("value");
+    }
+    if (manualAdjustment !== undefined && manualAdjustment !== null) {
+      if (isFn(env, "setManualAdjustment")) {
+        env.setManualAdjustment(key, Number(manualAdjustment));
+      } else if (isFn(options, "setManualAdjustment")) {
+        options.setManualAdjustment(Number(manualAdjustment));
+      } else {
+        return { success: false, error: "manualAdjustment is not supported for environment key " + key };
+      }
+      applied.push("manualAdjustment");
+    }
+    if (active !== undefined && active !== null) {
+      if (!isFn(options, "setActive")) {
+        return { success: false, error: "setActive is not supported for environment key " + key };
+      }
+      options.setActive(!!active);
+      applied.push("active");
+    }
+
+    if (applied.length === 0) {
+      return { success: false, error: "No environment settings were provided" };
+    }
+
+    return {
+      success: true,
+      environmentKey: key,
+      applied: applied,
+      current: inspectEnvironment([key]),
+    };
+  } catch (error) {
+    return fail("Error configuring environment", error);
   }
 };
 

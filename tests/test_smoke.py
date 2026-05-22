@@ -25,6 +25,11 @@ EXPECTED_TOOLS = {
     "controlIotDevice",
     "inspectIotDevice",
     "runIotAutomation",
+    "startIotAutomation",
+    "stopIotAutomation",
+    "getIotAutomationStatus",
+    "inspectEnvironment",
+    "configureEnvironment",
     "configureIosDevice",
     "getNetwork",
     "auditNetwork",
@@ -82,6 +87,13 @@ def test_new_tool_schemas_present():
     assert automation_schema["required"] == []
     assert "condition" in automation_schema["properties"]
     assert "actions" in automation_schema["properties"]
+
+    start_automation_schema = tools.TOOLS_BY_NAME["startIotAutomation"]["inputSchema"]
+    assert start_automation_schema["required"] == []
+    assert "triggerMode" in start_automation_schema["properties"]
+
+    environment_schema = tools.TOOLS_BY_NAME["configureEnvironment"]["inputSchema"]
+    assert environment_schema["required"] == ["environmentKey"]
 
     audit_schema = tools.TOOLS_BY_NAME["auditNetwork"]["inputSchema"]
     assert audit_schema["required"] == []
@@ -166,4 +178,4 @@ async def test_bridge_rejects_missing_result_field():
 
 
 def test_package_version_matches_pyproject():
-    assert __version__ == "0.1.12"
+    assert __version__ == "0.1.13"

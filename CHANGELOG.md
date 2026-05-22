@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.13
+
+- Added persistent IoT automation timers with `startIotAutomation`, `stopIotAutomation`, and `getIotAutomationStatus`.
+- Extended IoT conditions with proximity checks, composite conditions, candidate device attributes, sensor-state fallback, and physical-environment values.
+- Added `inspectEnvironment` and `configureEnvironment` so demos can inspect or adjust Packet Tracer environment keys such as wind before running IoT rules.
+
 ## 0.1.12
 
 - Added `inspectIotDevice` to expose IoT/Thing capabilities, selected external attributes, slot counts, IoE client presence, and custom variables.

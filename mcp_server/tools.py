@@ -260,6 +260,58 @@ IOT_ACTION_SCHEMA = {
     "required": ["deviceName"],
 }
 
+IOT_CONDITION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "deviceName": {"type": "string"},
+        "targetDeviceName": {"type": "string"},
+        "nearDeviceName": {"type": "string"},
+        "maxDistance": {"type": "number", "minimum": 0},
+        "attributeName": {"type": "string"},
+        "attributeNames": {"type": "array", "items": {"type": "string"}},
+        "environmentKey": {"type": "string"},
+        "environmentKeys": {"type": "array", "items": {"type": "string"}},
+        "operator": {
+            "type": "string",
+            "enum": [
+                "always", ">", ">=", "<", "<=", "==", "!=", "gt", "gte",
+                "lt", "lte", "eq", "ne", "truthy", "falsy", "near",
+                "within", "distance<=", "all", "and", "any", "or", "not",
+            ],
+        },
+        "value": {
+            "anyOf": [
+                {"type": "number"},
+                {"type": "string"},
+                {"type": "boolean"},
+            ],
+        },
+        "overrideValue": {
+            "anyOf": [
+                {"type": "number"},
+                {"type": "string"},
+                {"type": "boolean"},
+            ],
+            "description": "Use this value instead of reading a PT device/environment value.",
+        },
+        "useSensorState": {"type": "boolean"},
+        "conditions": {
+            "type": "array",
+            "items": {"type": "object"},
+            "description": "Nested conditions used by all/and/any/or.",
+        },
+        "condition": {
+            "type": "object",
+            "description": "Nested condition used by not.",
+        },
+    },
+    "description": (
+        "Condition for IoT automation. Supports readable device attributes, "
+        "sensor state, physical environment keys, logical-distance proximity, "
+        "and simple composite conditions."
+    ),
+}
+
 
 TOOLS: list[dict] = [
     {
@@ -782,34 +834,7 @@ TOOLS: list[dict] = [
                         "and 'rfid-open-door' if actions are omitted."
                     ),
                 },
-                "condition": {
-                    "type": "object",
-                    "properties": {
-                        "deviceName": {"type": "string"},
-                        "attributeName": {"type": "string"},
-                        "operator": {
-                            "type": "string",
-                            "enum": ["always", ">", ">=", "<", "<=", "==", "!=", "gt", "gte", "lt", "lte", "eq", "ne", "truthy", "falsy"],
-                        },
-                        "value": {
-                            "anyOf": [
-                                {"type": "number"},
-                                {"type": "string"},
-                                {"type": "boolean"},
-                            ],
-                        },
-                        "overrideValue": {
-                            "anyOf": [
-                                {"type": "number"},
-                                {"type": "string"},
-                                {"type": "boolean"},
-                            ],
-                            "description": "Use this value instead of reading a PT device attribute.",
-                        },
-                        "useSensorState": {"type": "boolean"},
-                    },
-                    "description": "Condition to evaluate before applying actions. Omit or use operator=always for unconditional action.",
-                },
+                "condition": IOT_CONDITION_SCHEMA,
                 "actions": {
                     "type": "array",
                     "items": IOT_ACTION_SCHEMA,
@@ -821,6 +846,101 @@ TOOLS: list[dict] = [
                 },
             },
             "required": [],
+        },
+    },
+    {
+        "name": "startIotAutomation",
+        "description": (
+            "Start a persistent Packet Tracer script-module timer that periodically "
+            "evaluates an IoT condition and applies actions. This enables live "
+            "demos such as RFID-card proximity opening a door or high wind "
+            "closing a window without writing the GUI Conditions table."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ruleName": {
+                    "type": "string",
+                    "description": (
+                        "Rule label. Built-in defaults include 'wind-close-window' "
+                        "and 'rfid-open-door' if condition/actions are omitted."
+                    ),
+                },
+                "condition": IOT_CONDITION_SCHEMA,
+                "actions": {"type": "array", "items": IOT_ACTION_SCHEMA},
+                "intervalMs": {
+                    "type": "integer",
+                    "minimum": 200,
+                    "maximum": 60000,
+                    "description": "Polling interval in milliseconds; default is 1000.",
+                },
+                "triggerMode": {
+                    "type": "string",
+                    "enum": ["continuous", "rising", "once"],
+                    "description": (
+                        "continuous repeats actions while true; rising acts only "
+                        "on false-to-true transition; once stops after first hit."
+                    ),
+                },
+                "runImmediately": {
+                    "type": "boolean",
+                    "description": "Evaluate once immediately after starting; default true.",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "stopIotAutomation",
+        "description": "Stop one persistent IoT automation rule, or all rules if ruleName is omitted/all.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ruleName": {"type": "string"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "getIotAutomationStatus",
+        "description": "Return active IoT automation rules, last condition results, and recent events.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ruleName": {"type": "string"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "inspectEnvironment",
+        "description": (
+            "Inspect Packet Tracer physical-environment keys and selected values "
+            "so IoT automation can use environment-driven conditions."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "environmentKeys": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "configureEnvironment",
+        "description": (
+            "Set a Packet Tracer physical-environment key value/manual adjustment "
+            "for IoT demos, for example raising wind before a wind-close-window rule."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "environmentKey": {"type": "string"},
+                "value": {"type": "number"},
+                "manualAdjustment": {"type": "number"},
+                "active": {"type": "boolean"},
+            },
+            "required": ["environmentKey"],
         },
     },
     {
