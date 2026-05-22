@@ -263,9 +263,18 @@ IOT_ACTION_SCHEMA = {
 IOT_CONDITION_SCHEMA = {
     "type": "object",
     "properties": {
-        "deviceName": {"type": "string"},
-        "targetDeviceName": {"type": "string"},
-        "nearDeviceName": {"type": "string"},
+        "deviceName": {
+            "type": "string",
+            "description": "Device to read for attribute checks, or one endpoint of a proximity check.",
+        },
+        "targetDeviceName": {
+            "type": "string",
+            "description": "Other endpoint for proximity checks; can be paired with deviceName or nearDeviceName.",
+        },
+        "nearDeviceName": {
+            "type": "string",
+            "description": "Readable alias for proximity checks such as targetDeviceName near nearDeviceName.",
+        },
         "maxDistance": {"type": "number", "minimum": 0},
         "attributeName": {"type": "string"},
         "attributeNames": {"type": "array", "items": {"type": "string"}},

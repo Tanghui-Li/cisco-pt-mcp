@@ -178,4 +178,4 @@ async def test_bridge_rejects_missing_result_field():
 
 
 def test_package_version_matches_pyproject():
-    assert __version__ == "0.1.13"
+    assert __version__ == "0.1.14"

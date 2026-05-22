@@ -1,7 +1,7 @@
 // User-callable functions exposed by the cisco-pt-mcp bridge.
 // Each returns { success: bool, ... } and is invoked via $se('runCode', 'return <fn>(<args>);').
 
-var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.13";
+var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.14";
 var CISCO_PT_MCP_BRIDGE_HOST = "127.0.0.1";
 var CISCO_PT_MCP_BRIDGE_PORT = 7531;
 var CISCO_PT_MCP_IOT_AUTOMATION_RULES = {};
@@ -401,13 +401,14 @@ function evaluateIotCondition(condition) {
   }
 
   if (operator === "near" || operator === "within" || operator === "distance<=") {
-    var sourceDevice = getDeviceByName(cond.deviceName);
-    var targetDeviceName = cond.targetDeviceName || cond.nearDeviceName;
+    var sourceDeviceName = cond.deviceName || (cond.targetDeviceName && cond.nearDeviceName ? cond.targetDeviceName : "");
+    var targetDeviceName = cond.deviceName ? (cond.targetDeviceName || cond.nearDeviceName) : cond.nearDeviceName;
+    var sourceDevice = getDeviceByName(sourceDeviceName);
     var targetDevice = targetDeviceName ? getDeviceByName(targetDeviceName) : null;
     if (!sourceDevice || !targetDevice) {
       return {
         met: false,
-        error: "Near condition requires existing deviceName and targetDeviceName",
+        error: "Near condition requires existing deviceName plus targetDeviceName/nearDeviceName, or targetDeviceName plus nearDeviceName",
         operator: operator,
       };
     }
@@ -431,7 +432,7 @@ function evaluateIotCondition(condition) {
       expectedValue: maxDistance,
       operator: operator,
       source: "logicalDistance",
-      deviceName: cond.deviceName,
+      deviceName: sourceDeviceName,
       targetDeviceName: targetDeviceName,
       sourcePosition: sourcePos,
       targetPosition: targetPos,

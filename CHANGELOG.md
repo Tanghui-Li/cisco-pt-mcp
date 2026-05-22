@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.14
+
+- Accepted both `deviceName + targetDeviceName` and `targetDeviceName + nearDeviceName` forms for IoT proximity conditions.
+
 ## 0.1.13
 
 - Added persistent IoT automation timers with `startIotAutomation`, `stopIotAutomation`, and `getIotAutomationStatus`.
