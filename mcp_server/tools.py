@@ -196,6 +196,70 @@ PORT_NAME_SCHEMA = {
     ),
 }
 
+DIGITAL_OUTPUT_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "slot": {"type": "integer", "minimum": 0},
+            "value": {"type": "integer"},
+        },
+        "required": ["slot", "value"],
+    },
+    "description": "Digital slot writes, e.g. [{slot: 0, value: 1}].",
+}
+
+ANALOG_OUTPUT_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "slot": {"type": "integer", "minimum": 0},
+            "value": {"type": "integer"},
+        },
+        "required": ["slot", "value"],
+    },
+    "description": "Analog slot writes, e.g. [{slot: 0, value: 512}].",
+}
+
+IOT_SUB_COMPONENT_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "index": {"type": "integer", "minimum": 0},
+        },
+        "required": ["name", "index"],
+    },
+    "description": "Set Thing sub-component image indexes when the device exposes setSubComponentIndex.",
+}
+
+IOT_MOVE_TO_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "x": {"type": "number"},
+        "y": {"type": "number"},
+    },
+    "required": ["x", "y"],
+    "description": "Move the device to a logical workspace coordinate as part of an IoT action.",
+}
+
+IOT_ACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "deviceName": {"type": "string"},
+        "digitalOutputs": DIGITAL_OUTPUT_SCHEMA,
+        "analogOutputs": ANALOG_OUTPUT_SCHEMA,
+        "subComponents": IOT_SUB_COMPONENT_SCHEMA,
+        "thingRotation": {"type": "number"},
+        "serialOutput": {"type": "string"},
+        "clearSerialOutputs": {"type": "boolean"},
+        "moveTo": IOT_MOVE_TO_SCHEMA,
+    },
+    "required": ["deviceName"],
+}
+
 
 TOOLS: list[dict] = [
     {
@@ -602,36 +666,15 @@ TOOLS: list[dict] = [
         "name": "controlIotDevice",
         "description": (
             "Control MCU/SBC/Thing-class IoT devices. Supports digital and analog outputs, "
-            "enabling OPC/CIP/industrial services, and Thing rotation/custom text overlays."
+            "enabling OPC/CIP/industrial services, Thing rotation/custom text overlays, "
+            "sub-component image switching, serial output notes, and action-time moves."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "deviceName": {"type": "string", "description": "IoT device name (must exist)."},
-                "digitalOutputs": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "slot": {"type": "integer", "minimum": 0},
-                            "value": {"type": "integer"},
-                        },
-                        "required": ["slot", "value"],
-                    },
-                    "description": "Digital slot writes, e.g. [{slot: 0, value: 1}].",
-                },
-                "analogOutputs": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "slot": {"type": "integer", "minimum": 0},
-                            "value": {"type": "integer"},
-                        },
-                        "required": ["slot", "value"],
-                    },
-                    "description": "Analog slot writes, e.g. [{slot: 0, value: 512}].",
-                },
+                "digitalOutputs": DIGITAL_OUTPUT_SCHEMA,
+                "analogOutputs": ANALOG_OUTPUT_SCHEMA,
                 "opcEnabled": {
                     "type": "boolean",
                     "description": "Enable or disable OPC on supported MCU/SBC/Thing devices.",
@@ -684,8 +727,100 @@ TOOLS: list[dict] = [
                     },
                     "description": "Custom text labels to place on Thing-style devices.",
                 },
+                "subComponents": IOT_SUB_COMPONENT_SCHEMA,
+                "serialOutput": {
+                    "type": "string",
+                    "description": "Append a line to supported MCU/SBC/Thing serial output.",
+                },
+                "clearSerialOutputs": {
+                    "type": "boolean",
+                    "description": "Clear supported MCU/SBC/Thing serial output.",
+                },
+                "moveTo": IOT_MOVE_TO_SCHEMA,
             },
             "required": ["deviceName"],
+        },
+    },
+    {
+        "name": "inspectIotDevice",
+        "description": (
+            "Inspect IoT/Thing device capabilities exposed by Packet Tracer IpcAPI, "
+            "including writable slots, sub-component support, IoE client presence, "
+            "sensor state, custom vars, and selected external attributes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "deviceName": {"type": "string", "description": "IoT/Thing device name."},
+                "attributeNames": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Optional external attribute names to query with "
+                        "getDeviceExternalAttributeValue, e.g. ['level', 'state']."
+                    ),
+                },
+            },
+            "required": ["deviceName"],
+        },
+    },
+    {
+        "name": "runIotAutomation",
+        "description": (
+            "Evaluate a one-shot IoT condition and apply MCP-side actions when it is met. "
+            "This does not write Packet Tracer's GUI Conditions table; it uses documented "
+            "Thing/MCU actions such as digitalWrite, analogWrite, setSubComponentIndex, "
+            "rotation, serial output, and device movement."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ruleName": {
+                    "type": "string",
+                    "description": (
+                        "Rule label. Built-in defaults include 'wind-close-window' "
+                        "and 'rfid-open-door' if actions are omitted."
+                    ),
+                },
+                "condition": {
+                    "type": "object",
+                    "properties": {
+                        "deviceName": {"type": "string"},
+                        "attributeName": {"type": "string"},
+                        "operator": {
+                            "type": "string",
+                            "enum": ["always", ">", ">=", "<", "<=", "==", "!=", "gt", "gte", "lt", "lte", "eq", "ne", "truthy", "falsy"],
+                        },
+                        "value": {
+                            "anyOf": [
+                                {"type": "number"},
+                                {"type": "string"},
+                                {"type": "boolean"},
+                            ],
+                        },
+                        "overrideValue": {
+                            "anyOf": [
+                                {"type": "number"},
+                                {"type": "string"},
+                                {"type": "boolean"},
+                            ],
+                            "description": "Use this value instead of reading a PT device attribute.",
+                        },
+                        "useSensorState": {"type": "boolean"},
+                    },
+                    "description": "Condition to evaluate before applying actions. Omit or use operator=always for unconditional action.",
+                },
+                "actions": {
+                    "type": "array",
+                    "items": IOT_ACTION_SCHEMA,
+                    "description": "Actions to apply when the condition is met.",
+                },
+                "dryRun": {
+                    "type": "boolean",
+                    "description": "Only evaluate and return planned actions; do not mutate the topology.",
+                },
+            },
+            "required": [],
         },
     },
     {

@@ -13,7 +13,7 @@ current `extension/source/` files in Packet Tracer:
 4. Export/package the module as `extension/cisco-pt-mcp.pts`.
 5. Restart Packet Tracer and call `getBridgeInfo`.
 
-Expected `getBridgeInfo.extensionVersion` for this release: `0.1.11`.
+Expected `getBridgeInfo.extensionVersion` for this release: `0.1.12`.
 
 ## 2. Create the GitHub Repository
 
@@ -42,9 +42,9 @@ git remote add origin https://github.com/Tanghui-Li/cisco-pt-mcp.git
 git checkout -B main
 git add .
 git commit -m "feat: expand Packet Tracer MCP bridge coverage"
-git tag v0.1.11
+git tag v0.1.12
 git push -u origin main
-git push origin v0.1.11
+git push origin v0.1.12
 ```
 
 ## 5. Verify GitHub Actions

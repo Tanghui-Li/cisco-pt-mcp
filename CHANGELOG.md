@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12
+
+- Added `inspectIotDevice` to expose IoT/Thing capabilities, selected external attributes, slot counts, IoE client presence, and custom variables.
+- Added `runIotAutomation` for MCP-side one-shot IoT condition/action workflows such as wind-triggered window closure and RFID-triggered door opening.
+- Expanded `controlIotDevice` with sub-component switching, serial output notes, serial clearing, and action-time device movement.
+- Documented the Packet Tracer limitation that GUI IoE Registration Server Conditions rules are visible in the UI but are not exposed as writable `IpcAPI` server methods.
+
 ## 0.1.11
 
 - Fixed topology connection reconstruction by using the documented `Cable::getOtherPort()`, `Cable::getPort1()`, `Cable::getPort2()`, and `Antenna::getReceiverAt()` APIs.

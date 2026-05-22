@@ -1,7 +1,7 @@
 // User-callable functions exposed by the cisco-pt-mcp bridge.
 // Each returns { success: bool, ... } and is invoked via $se('runCode', 'return <fn>(<args>);').
 
-var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.11";
+var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.12";
 var CISCO_PT_MCP_BRIDGE_HOST = "127.0.0.1";
 var CISCO_PT_MCP_BRIDGE_PORT = 7531;
 
@@ -83,6 +83,231 @@ function callPortEnabler(device, methodName, portNames) {
   return portNames.length;
 }
 
+function getProcessCapabilities(device, processNames) {
+  var out = {};
+  for (var i = 0; i < processNames.length; i++) {
+    var processName = processNames[i];
+    try {
+      var process = device.getProcess(processName);
+      if (process) {
+        out[processName] = true;
+      }
+    } catch (e) {
+      out[processName] = false;
+    }
+  }
+  return out;
+}
+
+function readDeviceExternalAttributes(device, attributeNames) {
+  var result = {};
+  if (!Array.isArray(attributeNames)) return result;
+  for (var i = 0; i < attributeNames.length; i++) {
+    var name = attributeNames[i];
+    if (!name) continue;
+    try {
+      if (isFn(device, "getDeviceExternalAttributeValue")) {
+        result[name] = device.getDeviceExternalAttributeValue(String(name));
+      } else {
+        result[name] = null;
+      }
+    } catch (e) {
+      result[name] = { error: String(e && e.message ? e.message : e) };
+    }
+  }
+  return result;
+}
+
+function listCustomVars(device) {
+  var vars = [];
+  if (!isFn(device, "getCustomVarsCount") || !isFn(device, "getCustomVarNameAt")) return vars;
+  try {
+    var count = Number(device.getCustomVarsCount());
+    for (var i = 0; i < count; i++) {
+      var name = String(device.getCustomVarNameAt(i));
+      var value = "";
+      if (isFn(device, "getCustomVarValueStrAt")) {
+        value = String(device.getCustomVarValueStrAt(i));
+      }
+      vars.push({ name: name, value: value });
+    }
+  } catch (e) {}
+  return vars;
+}
+
+function applyIotControlOptions(deviceName, options) {
+  var device = getDeviceByName(deviceName);
+  if (!device) {
+    return {
+      success: false,
+      error: `Device ${deviceName} not found`,
+      applied: [],
+    };
+  }
+
+  var applied = [];
+
+  if (Array.isArray(options.digitalOutputs) && options.digitalOutputs.length > 0) {
+    if (!isFn(device, "digitalWrite")) {
+      return { success: false, error: `Digital outputs are not supported on ${deviceName}`, applied: applied };
+    }
+    for (var i = 0; i < options.digitalOutputs.length; i++) {
+      var digital = options.digitalOutputs[i] || {};
+      device.digitalWrite(Number(digital.slot), Number(digital.value));
+    }
+    applied.push("digitalOutputs");
+  }
+
+  if (Array.isArray(options.analogOutputs) && options.analogOutputs.length > 0) {
+    if (!isFn(device, "analogWrite")) {
+      return { success: false, error: `Analog outputs are not supported on ${deviceName}`, applied: applied };
+    }
+    for (var j = 0; j < options.analogOutputs.length; j++) {
+      var analog = options.analogOutputs[j] || {};
+      device.analogWrite(Number(analog.slot), Number(analog.value));
+    }
+    applied.push("analogOutputs");
+  }
+
+  if (Array.isArray(options.subComponents) && options.subComponents.length > 0) {
+    if (!isFn(device, "setSubComponentIndex")) {
+      return { success: false, error: `Sub-component switching is not supported on ${deviceName}`, applied: applied };
+    }
+    for (var s = 0; s < options.subComponents.length; s++) {
+      var sub = options.subComponents[s] || {};
+      device.setSubComponentIndex(String(sub.name), Number(sub.index));
+    }
+    applied.push("subComponents");
+  }
+
+  if (options.serialOutput !== undefined && options.serialOutput !== null) {
+    if (!isFn(device, "addSerialOutputs")) {
+      return { success: false, error: `Serial output is not supported on ${deviceName}`, applied: applied };
+    }
+    device.addSerialOutputs(String(options.serialOutput));
+    applied.push("serialOutput");
+  }
+
+  if (options.clearSerialOutputs === true) {
+    if (!isFn(device, "clearSerialOutputs")) {
+      return { success: false, error: `Clearing serial output is not supported on ${deviceName}`, applied: applied };
+    }
+    device.clearSerialOutputs();
+    applied.push("clearSerialOutputs");
+  }
+
+  if (options.thingRotation !== undefined && options.thingRotation !== null) {
+    var workspace = getActiveLogicalWorkspace();
+    if (!workspace || !isFn(workspace, "setThingRotation")) {
+      return { success: false, error: `Thing rotation is not supported in this Packet Tracer build`, applied: applied };
+    }
+    workspace.setThingRotation(deviceName, Number(options.thingRotation));
+    applied.push("thingRotation");
+  }
+
+  if (options.moveTo && options.moveTo.x !== undefined && options.moveTo.y !== undefined) {
+    if (!isFn(device, "moveToLocation")) {
+      return { success: false, error: `Moving device is not supported on ${deviceName}`, applied: applied };
+    }
+    device.moveToLocation(Number(options.moveTo.x), Number(options.moveTo.y));
+    applied.push("moveTo");
+  }
+
+  if (Array.isArray(options.customTexts) && options.customTexts.length > 0) {
+    var workspaceForText = getActiveLogicalWorkspace();
+    if (!workspaceForText || !isFn(workspaceForText, "setThingCustomText")) {
+      return { success: false, error: `Thing custom text is not supported in this Packet Tracer build`, applied: applied };
+    }
+    for (var k = 0; k < options.customTexts.length; k++) {
+      var label = options.customTexts[k] || {};
+      workspaceForText.setThingCustomText(
+        deviceName,
+        Number(label.x || 0),
+        Number(label.y || 0),
+        Number(label.width || 120),
+        Number(label.height || 24),
+        String(label.text || "")
+      );
+    }
+    applied.push("customTexts");
+  }
+
+  return {
+    success: true,
+    applied: applied,
+  };
+}
+
+function evaluateIotCondition(condition) {
+  var cond = condition || {};
+  var operator = String(cond.operator || "always").toLowerCase();
+  var actual = cond.overrideValue;
+  var source = "overrideValue";
+
+  if (operator === "always") {
+    return { met: true, actualValue: true, expectedValue: true, operator: operator, source: "always" };
+  }
+
+  if (actual === undefined && cond.deviceName) {
+    var device = getDeviceByName(cond.deviceName);
+    if (!device) {
+      return { met: false, error: `Condition device ${cond.deviceName} not found`, operator: operator };
+    }
+    if (cond.attributeName && isFn(device, "getDeviceExternalAttributeValue")) {
+      actual = device.getDeviceExternalAttributeValue(String(cond.attributeName));
+      source = "externalAttribute";
+    } else if (cond.useSensorState === true && isFn(device, "getSensorState")) {
+      actual = device.getSensorState();
+      source = "sensorState";
+    } else {
+      return {
+        met: false,
+        error: "No condition value available; provide overrideValue or a readable attributeName/useSensorState",
+        operator: operator,
+      };
+    }
+  }
+
+  var expected = cond.value;
+  var actualNumber = Number(actual);
+  var expectedNumber = Number(expected);
+  var met = false;
+
+  if (operator === ">" || operator === "gt") met = actualNumber > expectedNumber;
+  else if (operator === ">=" || operator === "gte") met = actualNumber >= expectedNumber;
+  else if (operator === "<" || operator === "lt") met = actualNumber < expectedNumber;
+  else if (operator === "<=" || operator === "lte") met = actualNumber <= expectedNumber;
+  else if (operator === "==" || operator === "=" || operator === "eq") met = String(actual) === String(expected);
+  else if (operator === "!=" || operator === "ne") met = String(actual) !== String(expected);
+  else if (operator === "truthy") met = !!actual;
+  else if (operator === "falsy") met = !actual;
+  else throw new Error("Unsupported condition operator: " + operator);
+
+  return {
+    met: met,
+    actualValue: actual,
+    expectedValue: expected,
+    operator: operator,
+    source: source,
+  };
+}
+
+function defaultIotAutomationActions(ruleName) {
+  if (ruleName === "wind-close-window") {
+    return [{
+      deviceName: "Window",
+      digitalOutputs: [{ slot: 0, value: 0 }],
+    }];
+  }
+  if (ruleName === "rfid-open-door") {
+    return [{
+      deviceName: "DOOR-ACCESS",
+      digitalOutputs: [{ slot: 0, value: 1 }],
+    }];
+  }
+  return [];
+}
+
 var WIRELESS_AUTH_TYPES = {
   none: 0,
   null: 0,
@@ -149,6 +374,7 @@ getBridgeInfo = function () {
       "dhcp",
       "home-router",
       "iot",
+      "iot-automation",
       "topology-audit",
     ],
   };
@@ -1253,7 +1479,11 @@ controlIotDevice = function (
   svPublisherPorts,
   svSubscriberPorts,
   thingRotation,
-  customTexts
+  customTexts,
+  subComponents,
+  serialOutput,
+  clearSerialOutputs,
+  moveTo
 ) {
   try {
     var device = getDeviceByName(deviceName);
@@ -1266,27 +1496,20 @@ controlIotDevice = function (
 
     var applied = [];
 
-    if (Array.isArray(digitalOutputs) && digitalOutputs.length > 0) {
-      if (!isFn(device, "digitalWrite")) {
-        return { success: false, error: `Digital outputs are not supported on ${deviceName}` };
-      }
-      for (var i = 0; i < digitalOutputs.length; i++) {
-        var digital = digitalOutputs[i] || {};
-        device.digitalWrite(Number(digital.slot), Number(digital.value));
-      }
-      applied.push("digitalOutputs");
+    var basicControl = applyIotControlOptions(deviceName, {
+      digitalOutputs: digitalOutputs,
+      analogOutputs: analogOutputs,
+      thingRotation: thingRotation,
+      customTexts: customTexts,
+      subComponents: subComponents,
+      serialOutput: serialOutput,
+      clearSerialOutputs: clearSerialOutputs,
+      moveTo: moveTo,
+    });
+    if (!basicControl.success) {
+      return basicControl;
     }
-
-    if (Array.isArray(analogOutputs) && analogOutputs.length > 0) {
-      if (!isFn(device, "analogWrite")) {
-        return { success: false, error: `Analog outputs are not supported on ${deviceName}` };
-      }
-      for (var j = 0; j < analogOutputs.length; j++) {
-        var analog = analogOutputs[j] || {};
-        device.analogWrite(Number(analog.slot), Number(analog.value));
-      }
-      applied.push("analogOutputs");
-    }
+    applied = applied.concat(basicControl.applied);
 
     if (opcEnabled === true) {
       if (!isFn(device, "enableOpc")) {
@@ -1332,34 +1555,6 @@ controlIotDevice = function (
       applied.push("svSubscriberPorts");
     }
 
-    if (thingRotation !== undefined && thingRotation !== null) {
-      var workspace = getActiveLogicalWorkspace();
-      if (!workspace || !isFn(workspace, "setThingRotation")) {
-        return { success: false, error: `Thing rotation is not supported in this Packet Tracer build` };
-      }
-      workspace.setThingRotation(deviceName, Number(thingRotation));
-      applied.push("thingRotation");
-    }
-
-    if (Array.isArray(customTexts) && customTexts.length > 0) {
-      var workspaceForText = getActiveLogicalWorkspace();
-      if (!workspaceForText || !isFn(workspaceForText, "setThingCustomText")) {
-        return { success: false, error: `Thing custom text is not supported in this Packet Tracer build` };
-      }
-      for (var k = 0; k < customTexts.length; k++) {
-        var label = customTexts[k] || {};
-        workspaceForText.setThingCustomText(
-          deviceName,
-          Number(label.x || 0),
-          Number(label.y || 0),
-          Number(label.width || 120),
-          Number(label.height || 24),
-          String(label.text || "")
-        );
-      }
-      applied.push("customTexts");
-    }
-
     if (applied.length === 0) {
       return {
         success: false,
@@ -1374,6 +1569,133 @@ controlIotDevice = function (
     };
   } catch (error) {
     return fail("Error controlling IoT device", error);
+  }
+};
+
+inspectIotDevice = function (deviceName, attributeNames) {
+  try {
+    var device = getDeviceByName(deviceName);
+    if (!device) {
+      return { success: false, error: `Device ${deviceName} not found` };
+    }
+
+    var info = {
+      name: String(device.getName()),
+      model: "",
+      type: device.getType ? device.getType() : null,
+      capabilities: {
+        digitalWrite: isFn(device, "digitalWrite"),
+        analogWrite: isFn(device, "analogWrite"),
+        setSubComponentIndex: isFn(device, "setSubComponentIndex"),
+        serialOutputs: isFn(device, "addSerialOutputs"),
+        sensorType: isFn(device, "getSensorType"),
+        sensorState: isFn(device, "getSensorState"),
+        deviceExternalAttributes: isFn(device, "getDeviceExternalAttributes"),
+        deviceExternalAttributeValue: isFn(device, "getDeviceExternalAttributeValue"),
+      },
+      processes: getProcessCapabilities(device, ["IoEClient", "IoeClient", "WirelessClient", "WirelessServer"]),
+      slots: {},
+      customVars: listCustomVars(device),
+      requestedAttributes: readDeviceExternalAttributes(device, attributeNames),
+    };
+
+    try {
+      info.model = device.getDescriptor().getModelName();
+    } catch (e) {}
+    try {
+      if (isFn(device, "getSensorType")) info.sensorType = String(device.getSensorType());
+    } catch (e2) {
+      info.sensorTypeError = String(e2 && e2.message ? e2.message : e2);
+    }
+    try {
+      if (isFn(device, "getSensorState")) info.sensorState = device.getSensorState();
+    } catch (e3) {
+      info.sensorStateError = String(e3 && e3.message ? e3.message : e3);
+    }
+    try {
+      if (isFn(device, "getDeviceExternalAttributes")) {
+        info.deviceExternalAttributes = String(device.getDeviceExternalAttributes());
+      }
+    } catch (e4) {
+      info.deviceExternalAttributesError = String(e4 && e4.message ? e4.message : e4);
+    }
+    try {
+      if (isFn(device, "getAnalogSlotsCount")) info.slots.analog = Number(device.getAnalogSlotsCount());
+      if (isFn(device, "getDigitalSlotsCount")) info.slots.digital = Number(device.getDigitalSlotsCount());
+      if (isFn(device, "getSlotsCount")) info.slots.total = Number(device.getSlotsCount());
+    } catch (e5) {
+      info.slots.error = String(e5 && e5.message ? e5.message : e5);
+    }
+
+    return {
+      success: true,
+      result: info,
+    };
+  } catch (error) {
+    return fail("Error inspecting IoT device", error);
+  }
+};
+
+runIotAutomation = function (ruleName, condition, actions, dryRun) {
+  try {
+    var normalizedRule = String(ruleName || "custom").toLowerCase();
+    var conditionResult = evaluateIotCondition(condition || { operator: "always" });
+    var plannedActions = Array.isArray(actions) && actions.length > 0
+      ? actions
+      : defaultIotAutomationActions(normalizedRule);
+
+    if (!conditionResult.met) {
+      return {
+        success: true,
+        ruleName: normalizedRule,
+        condition: conditionResult,
+        actionsApplied: [],
+        message: "Condition was not met; no IoT action applied",
+      };
+    }
+
+    var actionResults = [];
+    if (dryRun === true) {
+      return {
+        success: true,
+        ruleName: normalizedRule,
+        condition: conditionResult,
+        dryRun: true,
+        plannedActions: plannedActions,
+        actionsApplied: [],
+      };
+    }
+
+    for (var i = 0; i < plannedActions.length; i++) {
+      var action = plannedActions[i] || {};
+      if (!action.deviceName) {
+        actionResults.push({ success: false, error: "Action missing deviceName", actionIndex: i });
+        continue;
+      }
+      var result = applyIotControlOptions(action.deviceName, action);
+      result.deviceName = action.deviceName;
+      result.actionIndex = i;
+      actionResults.push(result);
+      if (!result.success) {
+        return {
+          success: false,
+          ruleName: normalizedRule,
+          condition: conditionResult,
+          actionsApplied: actionResults,
+          error: result.error,
+        };
+      }
+    }
+
+    return {
+      success: true,
+      ruleName: normalizedRule,
+      condition: conditionResult,
+      actionsApplied: actionResults,
+      message: "IoT automation rule executed",
+    };
+  } catch (error) {
+    return fail("Error running IoT automation", error);
   }
 };
 

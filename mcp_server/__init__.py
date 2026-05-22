@@ -6,4 +6,4 @@ Backboard, ...) can drive a running Packet Tracer through the headless
 extension shipped under ``extension/source/``.
 """
 
-__version__ = "0.1.11"
+__version__ = "0.1.12"

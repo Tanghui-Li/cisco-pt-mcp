@@ -97,7 +97,9 @@ Use this before debugging stale `.pts` packages.
 | `configureWireless` | Configure SSID, authentication, encryption, channel, broadcast, MAC filters, and wireless client hints |
 | `configureDhcpServer` | Configure DHCP service state, pools, excluded ranges, gateway, DNS, and lease limits |
 | `configureHomeRouter` | Configure HomeRouter/Linksys WAN mode, remote management, port forwarding, and DMZ |
-| `controlIotDevice` | Drive MCU/SBC/Thing outputs and enable OPC, CIP, Profinet, GOOSE, and sampled-value helpers |
+| `controlIotDevice` | Drive MCU/SBC/Thing outputs, sub-components, serial notes, movement, and industrial protocol helpers |
+| `inspectIotDevice` | Inspect IoT/Thing capabilities, selected external attributes, slots, and IoE client presence |
+| `runIotAutomation` | Evaluate one-shot MCP-side IoT condition/action rules for demos such as wind-close-window or RFID-open-door |
 | `configureIosDevice` | Run IOS CLI configuration commands on routers and switches |
 | `getNetwork` / `getDeviceInfo` | Inspect workspace devices, interfaces, port state, wireless state, IOS probes, and links |
 | `auditNetwork` | Check expected devices, disconnected nodes, wireless associations, and optional green link lights |
@@ -108,6 +110,12 @@ Use this before debugging stale `.pts` packages.
 Packet Tracer script modules expose only part of Packet Tracer's internal GUI
 behavior. Some GUI-visible operations, especially wireless client profile
 switching on IoT Things, are not fully reliable through `IpcAPI`.
+
+The IoE Registration Server **Conditions** page is documented by Packet Tracer
+as a GUI feature, but the public `IpcAPI` does not expose writable
+`IoeServerProcess` rule-management methods. Use `runIotAutomation` for
+MCP-side one-shot condition/action demos, or configure persistent Conditions
+rules manually in the Packet Tracer GUI.
 
 For IoT wireless labs, note the distinction in the official `IpcAPI`
 enumeration: `eAuthenNull = 0` and `eAuthenOpen = 6` are different values.

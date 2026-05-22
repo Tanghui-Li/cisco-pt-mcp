@@ -23,6 +23,8 @@ EXPECTED_TOOLS = {
     "configureDhcpServer",
     "configureHomeRouter",
     "controlIotDevice",
+    "inspectIotDevice",
+    "runIotAutomation",
     "configureIosDevice",
     "getNetwork",
     "auditNetwork",
@@ -70,6 +72,16 @@ def test_new_tool_schemas_present():
     assert iot_schema["required"] == ["deviceName"]
     assert "digitalOutputs" in iot_schema["properties"]
     assert "thingRotation" in iot_schema["properties"]
+    assert "subComponents" in iot_schema["properties"]
+
+    inspect_iot_schema = tools.TOOLS_BY_NAME["inspectIotDevice"]["inputSchema"]
+    assert inspect_iot_schema["required"] == ["deviceName"]
+    assert "attributeNames" in inspect_iot_schema["properties"]
+
+    automation_schema = tools.TOOLS_BY_NAME["runIotAutomation"]["inputSchema"]
+    assert automation_schema["required"] == []
+    assert "condition" in automation_schema["properties"]
+    assert "actions" in automation_schema["properties"]
 
     audit_schema = tools.TOOLS_BY_NAME["auditNetwork"]["inputSchema"]
     assert audit_schema["required"] == []
@@ -154,4 +166,4 @@ async def test_bridge_rejects_missing_result_field():
 
 
 def test_package_version_matches_pyproject():
-    assert __version__ == "0.1.11"
+    assert __version__ == "0.1.12"
