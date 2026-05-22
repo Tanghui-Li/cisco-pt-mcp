@@ -9,7 +9,7 @@ htmlWindow.prototype.cleanUp = function () {
 htmlWindow.prototype.show = function () {
   if (webViewManager.getWebView(this.webviewId) == null) {
     this.webview = webViewManager.createWebView(
-      "Packet Tracer MCP",
+      "Cisco PT MCP Bridge",
       "this-sm:index.html",
       800,
       500

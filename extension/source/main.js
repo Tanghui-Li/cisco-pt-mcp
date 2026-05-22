@@ -8,7 +8,7 @@ function builder() {
 
 builder.prototype.init = function () {
   var menu = ipc.appWindow().getMenuBar().getExtensionsPopupMenu();
-  this.m_builderUuid = menu.insertItem("", "Packet Tracer MCP");
+  this.m_builderUuid = menu.insertItem("", "Cisco PT MCP Bridge");
   var menuItem = menu.getMenuItemByUuid(this.m_builderUuid);
   menuItem.registerEvent("onClicked", this, this.menuClicked);
 };

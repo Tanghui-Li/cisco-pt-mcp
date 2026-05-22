@@ -1,33 +1,74 @@
-"""Offline smoke tests — run without Packet Tracer."""
+"""Offline smoke tests - run without Packet Tracer."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 
-import pytest
 import mcp.types as mt
+import pytest
 
 from mcp_server import __version__, bridge, server, tools
 
 
 EXPECTED_TOOLS = {
-    "addDevice", "addModule", "addLink",
-    "removeDevice", "removeLink",
-    "configurePcIp", "configureIosDevice",
-    "getNetwork", "getDeviceInfo",
-    "setSimulationMode", "getSimulationStatus", "stepSimulation", "sendPdu",
-    "renameDevice", "moveDevice", "setPower",
-    "getPduResults", "getCommandLog",
+    "getBridgeInfo",
+    "addDevice",
+    "addModule",
+    "addLink",
+    "removeDevice",
+    "removeLink",
+    "configureEndDeviceIp",
+    "configureWireless",
+    "configureDhcpServer",
+    "configureHomeRouter",
+    "controlIotDevice",
+    "configureIosDevice",
+    "getNetwork",
+    "getDeviceInfo",
+    "setSimulationMode",
+    "getSimulationStatus",
+    "stepSimulation",
+    "sendPdu",
+    "renameDevice",
+    "moveDevice",
+    "setPower",
+    "getPduResults",
+    "getCommandLog",
 }
 
 
 def test_tool_set_complete():
     names = {t["name"] for t in tools.TOOLS}
     assert names == EXPECTED_TOOLS
+    assert tools.TOOLS_BY_NAME["getBridgeInfo"]["inputSchema"]["required"] == []
     assert tools.TOOLS_BY_NAME["addDevice"]["inputSchema"]["required"] == [
         "deviceName", "deviceModel", "x", "y",
     ]
+    assert "HomeRouter-PT-AC" in tools.TOOLS_BY_NAME["addDevice"]["inputSchema"]["properties"]["deviceModel"]["enum"]
+    assert "Wind Detector" in tools.TOOLS_BY_NAME["addDevice"]["inputSchema"]["properties"]["deviceModel"]["enum"]
+    assert "custom_io" in tools.TOOLS_BY_NAME["addLink"]["inputSchema"]["properties"]["linkType"]["enum"]
+
+
+def test_new_tool_schemas_present():
+    wireless_schema = tools.TOOLS_BY_NAME["configureWireless"]["inputSchema"]
+    assert wireless_schema["required"] == ["deviceName"]
+    assert wireless_schema["properties"]["authType"]["enum"] == [
+        "none", "null", "iot-open", "open", "wep", "wpa-psk", "wpa2-psk",
+    ]
+
+    dhcp_schema = tools.TOOLS_BY_NAME["configureDhcpServer"]["inputSchema"]
+    assert dhcp_schema["required"] == ["deviceName"]
+    assert "excludedRanges" in dhcp_schema["properties"]
+
+    home_router_schema = tools.TOOLS_BY_NAME["configureHomeRouter"]["inputSchema"]
+    assert home_router_schema["required"] == ["deviceName"]
+    assert home_router_schema["properties"]["internetConnectionType"]["enum"] == ["dhcp", "pppoe", "static"]
+
+    iot_schema = tools.TOOLS_BY_NAME["controlIotDevice"]["inputSchema"]
+    assert iot_schema["required"] == ["deviceName"]
+    assert "digitalOutputs" in iot_schema["properties"]
+    assert "thingRotation" in iot_schema["properties"]
 
 
 def test_schemas_serializable():
@@ -35,7 +76,7 @@ def test_schemas_serializable():
         json.dumps(t["inputSchema"])
         props = t["inputSchema"].get("properties", {})
         for name, p in props.items():
-            assert "type" in p, f"{t['name']}.{name} missing type"
+            assert ("type" in p) or ("anyOf" in p), f"{t['name']}.{name} missing type/anyOf"
 
 
 def test_schemas_accepted_by_mcp_types():
@@ -107,4 +148,4 @@ async def test_bridge_rejects_missing_result_field():
 
 
 def test_package_version_matches_pyproject():
-    assert __version__ == "0.1.2"
+    assert __version__ == "0.1.9"

@@ -1,91 +1,148 @@
 # cisco-pt-mcp
 
-Let AI clients control a running Cisco Packet Tracer instance. Open source.
+Let MCP clients control a running Cisco Packet Tracer instance through a local
+Packet Tracer script-module bridge.
 
-![Demo](https://raw.githubusercontent.com/muhammadbalawal/cisco-pt-mcp/main/demo.gif)
+This repository is a maintained fork of
+[`muhammadbalawal/cisco-pt-mcp`](https://github.com/muhammadbalawal/cisco-pt-mcp).
+The fork keeps the original MIT license and expands the tool surface for
+coursework, IoT labs, home gateways, wireless devices, DHCP, and Packet Tracer
+simulation verification.
 
----
+![Demo](https://raw.githubusercontent.com/mallocInf/cisco-pt-mcp/main/demo.gif)
+
+## What It Does
+
+`cisco-pt-mcp` has two local components:
+
+- a Python MCP server that exposes Packet Tracer actions as MCP tools;
+- a Packet Tracer `.pts` script module that connects to the MCP server over
+  loopback Socket.IO and executes Packet Tracer `IpcAPI` calls.
+
+No cloud service is involved. The bridge listens on `127.0.0.1:7531`.
+
+## Requirements
+
+- Cisco Packet Tracer with script modules enabled.
+- Python 3.10 or newer.
+- An MCP client such as Codex CLI, Claude Code, Cursor, or VS Code.
+- `uv` or another Python package runner.
 
 ## Install
 
-Two components. Five minutes.
-
 ### 1. MCP Server
 
-[Install uv](https://docs.astral.sh/uv/getting-started/installation/) if you don't have it, then register with your client:
+For a released package:
 
-**Claude Code**
 ```sh
-claude mcp add cisco-pt-mcp --scope user -- uvx cisco-pt-mcp
+uvx cisco-pt-mcp
 ```
 
-**Cursor** (`~/.cursor/mcp.json` or `.cursor/mcp.json` per project)
-```json
-{
-  "mcpServers": {
-    "cisco-pt-mcp": { "command": "uvx", "args": ["cisco-pt-mcp"] }
-  }
-}
+For a local checkout:
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[dev]"
+cisco-pt-mcp
 ```
 
-**VS Code** (`.vscode/mcp.json`)
-```json
-{
-  "servers": {
-    "cisco-pt-mcp": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["cisco-pt-mcp"]
-    }
-  }
-}
-```
+Example Codex CLI configuration:
 
-**Codex CLI** (`~/.codex/config.toml`)
 ```toml
 [mcp_servers.cisco-pt-mcp]
 command = "uvx"
 args = ["cisco-pt-mcp"]
 ```
 
+For a local checkout during development:
+
+```toml
+[mcp_servers.cisco-pt-mcp]
+command = "/absolute/path/to/.venv/bin/cisco-pt-mcp"
+```
+
 ### 2. Packet Tracer Extension
 
 1. Open Packet Tracer.
-2. Go to **Extensions → Scripting → Configure PT Script Modules…**
-3. Click **Add** and select [`cisco-pt-mcp.pts`](extension/cisco-pt-mcp.pts).
+2. Go to **Extensions -> Scripting -> Configure PT Script Modules...**.
+3. Click **Add** and select `extension/cisco-pt-mcp.pts`.
 4. Restart Packet Tracer.
+5. Open **Extensions -> Cisco PT MCP Bridge**.
 
-### 3. Run
+The bridge window should show `connected` after the Python MCP server starts.
 
-Click **Extensions → Packet Tracer MCP** to open the bridge window, then start your MCP client. The status pill flips to `connected` within a second. Start prompting.
+### 3. Verify Loaded Version
 
----
+Call the MCP tool:
 
-## Tools
+```json
+{
+  "tool": "getBridgeInfo",
+  "arguments": {}
+}
+```
 
-| Tool | Description |
+The result includes the Packet Tracer extension version and bridge capabilities.
+Use this before debugging stale `.pts` packages.
+
+## Tool Highlights
+
+| Tool | Purpose |
 |---|---|
-| `addDevice` | Drop a router, switch, or PC onto the canvas |
-| `addModule` | Install an interface module into a device slot |
-| `addLink` | Connect two devices with a cable |
-| `removeDevice` | Delete one or more devices |
-| `removeLink` | Delete one or more cables |
-| `renameDevice` | Rename an existing device |
-| `moveDevice` | Reposition a device on the canvas |
-| `setPower` | Power a device on or off |
-| `configurePcIp` | Set IP, subnet, gateway, DNS, or enable DHCP on a PC |
-| `configureIosDevice` | Run IOS CLI commands on a router or switch |
-| `getNetwork` | Snapshot of all devices, interfaces, and cables |
-| `getDeviceInfo` | Detailed view of a single device |
-| `setSimulationMode` | Switch between simulation and realtime mode |
-| `getSimulationStatus` | Query simulation state and frame count |
-| `stepSimulation` | Step the simulation forward, backward, or reset |
-| `sendPdu` | Add an ICMP ping PDU between two devices |
-| `getPduResults` | Read PDU outcomes after stepping the simulation |
-| `getCommandLog` | Read the IOS command history logged by Packet Tracer |
+| `getBridgeInfo` | Read extension version and bridge capability info from Packet Tracer |
+| `addDevice` | Add routers, switches, APs, home gateways, servers, MCU/SBC boards, and many IoT devices |
+| `addLink` | Connect Ethernet, serial, fiber, wireless/media, IoT, and custom I/O links where Packet Tracer supports them |
+| `configureEndDeviceIp` | Configure static/DHCP IPv4, gateway, and DNS on PCs, servers, IoT nodes, and gateway ports |
+| `configureWireless` | Configure SSID, authentication, encryption, channel, broadcast, MAC filters, and wireless client hints |
+| `configureDhcpServer` | Configure DHCP service state, pools, excluded ranges, gateway, DNS, and lease limits |
+| `configureHomeRouter` | Configure HomeRouter/Linksys WAN mode, remote management, port forwarding, and DMZ |
+| `controlIotDevice` | Drive MCU/SBC/Thing outputs and enable OPC, CIP, Profinet, GOOSE, and sampled-value helpers |
+| `configureIosDevice` | Run IOS CLI configuration commands on routers and switches |
+| `getNetwork` / `getDeviceInfo` | Inspect workspace devices, interfaces, wireless state, IOS probes, and links |
+| `sendPdu` / `stepSimulation` / `getPduResults` | Create and inspect Packet Tracer simulation traffic |
 
----
+## Packet Tracer Notes
+
+Packet Tracer script modules expose only part of Packet Tracer's internal GUI
+behavior. Some GUI-visible operations, especially wireless client profile
+switching on IoT Things, are not fully reliable through `IpcAPI`.
+
+For IoT wireless labs, note the distinction in the official `IpcAPI`
+enumeration: `eAuthenNull = 0` and `eAuthenOpen = 6` are different values.
+Many Packet Tracer IoT Things ship with a default `HomeGateway` profile that
+reports `authenType = 0`. Use `authType: "none"` or `authType: "iot-open"` for
+those cases, and use `authType: "open"` when you specifically want
+`eAuthenOpen = 6`.
+
+## Development
+
+Run offline checks:
+
+```sh
+python -m pip install -e ".[dev]"
+python -m pytest -q
+node --check extension/source/userfunctions.js
+node --check extension/source/interface/interface.js
+```
+
+After editing files under `extension/source/`, rebuild
+`extension/cisco-pt-mcp.pts` from Packet Tracer GUI:
+
+1. Open **Extensions -> Scripting -> Configure PT Script Modules...**.
+2. Import or update the script module source.
+3. Export/package the `.pts`.
+4. Restart Packet Tracer and call `getBridgeInfo`.
+
+## Security
+
+The bridge is loopback-only (`127.0.0.1`). Do not expose port `7531` to an
+untrusted network. MCP clients can execute Packet Tracer actions, including IOS
+configuration changes, so only run clients you trust.
 
 ## License
 
-MIT
+MIT. See [`LICENSE`](LICENSE).
+
+Original project copyright belongs to Muhammad Balawal and contributors.
+Fork modifications are maintained by mallocInf and contributors.
