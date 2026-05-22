@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.11
+
+- Fixed topology connection reconstruction by using the documented `Cable::getOtherPort()`, `Cable::getPort1()`, `Cable::getPort2()`, and `Antenna::getReceiverAt()` APIs.
+- Improved `getNetwork` discovery statistics so Packet Tracer link discovery failures are easier to diagnose.
+
+## 0.1.10
+
+- Added port-level link discovery fallback for Packet Tracer builds where `Network::getLinkCount()` reports zero while `Port::getLink()` is available.
+- Added richer interface diagnostics in `getNetwork`, including remote port names, link light status, protocol/port state, wireless flag, and port type.
+- Added `auditNetwork` for generic topology health checks covering expected devices, disconnected nodes, wireless association, and optional green-link validation.
+
 ## 0.1.9
 
 - Added `getBridgeInfo` so users can verify which Packet Tracer `.pts` bridge is loaded.

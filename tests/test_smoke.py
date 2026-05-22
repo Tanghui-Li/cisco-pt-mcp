@@ -25,6 +25,7 @@ EXPECTED_TOOLS = {
     "controlIotDevice",
     "configureIosDevice",
     "getNetwork",
+    "auditNetwork",
     "getDeviceInfo",
     "setSimulationMode",
     "getSimulationStatus",
@@ -69,6 +70,11 @@ def test_new_tool_schemas_present():
     assert iot_schema["required"] == ["deviceName"]
     assert "digitalOutputs" in iot_schema["properties"]
     assert "thingRotation" in iot_schema["properties"]
+
+    audit_schema = tools.TOOLS_BY_NAME["auditNetwork"]["inputSchema"]
+    assert audit_schema["required"] == []
+    assert "wirelessClientDeviceNames" in audit_schema["properties"]
+    assert "requireGreenLinks" in audit_schema["properties"]
 
 
 def test_schemas_serializable():
@@ -148,4 +154,4 @@ async def test_bridge_rejects_missing_result_field():
 
 
 def test_package_version_matches_pyproject():
-    assert __version__ == "0.1.9"
+    assert __version__ == "0.1.11"

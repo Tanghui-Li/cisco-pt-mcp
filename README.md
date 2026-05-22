@@ -99,7 +99,8 @@ Use this before debugging stale `.pts` packages.
 | `configureHomeRouter` | Configure HomeRouter/Linksys WAN mode, remote management, port forwarding, and DMZ |
 | `controlIotDevice` | Drive MCU/SBC/Thing outputs and enable OPC, CIP, Profinet, GOOSE, and sampled-value helpers |
 | `configureIosDevice` | Run IOS CLI configuration commands on routers and switches |
-| `getNetwork` / `getDeviceInfo` | Inspect workspace devices, interfaces, wireless state, IOS probes, and links |
+| `getNetwork` / `getDeviceInfo` | Inspect workspace devices, interfaces, port state, wireless state, IOS probes, and links |
+| `auditNetwork` | Check expected devices, disconnected nodes, wireless associations, and optional green link lights |
 | `sendPdu` / `stepSimulation` / `getPduResults` | Create and inspect Packet Tracer simulation traffic |
 
 ## Packet Tracer Notes

@@ -710,10 +710,47 @@ TOOLS: list[dict] = [
         "name": "getNetwork",
         "description": (
             "Snapshot of the entire workspace: every device, its interfaces "
-            "(with in_use flags), and every cable. Call this before addLink "
-            "or removeDevice when unsure of current state."
+            "(with in_use/status flags), and every discovered cable/wireless link. "
+            "Call this before addLink or removeDevice when unsure of current state."
         ),
         "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "auditNetwork",
+        "description": (
+            "Run a generic topology health audit using Packet Tracer port/link state. "
+            "Checks expected devices, disconnected devices, selected wireless client "
+            "associations, and optionally non-green link lights."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "expectedDeviceNames": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Device names that must exist in the workspace.",
+                },
+                "allowedDisconnectedDeviceNames": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Devices that may legitimately have no discovered links.",
+                },
+                "wirelessClientDeviceNames": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Wireless clients that must be associated with an AP.",
+                },
+                "requireConnectedDevices": {
+                    "type": "boolean",
+                    "description": "When true/default, devices with interfaces must have at least one discovered link.",
+                },
+                "requireGreenLinks": {
+                    "type": "boolean",
+                    "description": "When true, used ports must report green/blinking link lights.",
+                },
+            },
+            "required": [],
+        },
     },
     {
         "name": "getDeviceInfo",

@@ -1,7 +1,7 @@
 // User-callable functions exposed by the cisco-pt-mcp bridge.
 // Each returns { success: bool, ... } and is invoked via $se('runCode', 'return <fn>(<args>);').
 
-var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.9";
+var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.11";
 var CISCO_PT_MCP_BRIDGE_HOST = "127.0.0.1";
 var CISCO_PT_MCP_BRIDGE_PORT = 7531;
 
@@ -149,6 +149,7 @@ getBridgeInfo = function () {
       "dhcp",
       "home-router",
       "iot",
+      "topology-audit",
     ],
   };
 };
@@ -1414,8 +1415,73 @@ getNetwork = function () {
     var deviceCount = ipc.network().getDeviceCount();
     var devices = [];
     var connections = [];
+    var portRecords = [];
     var portOwners = {};
-    var linkCount = ipc.network().getLinkCount();
+    var seenConnections = {};
+    var network = ipc.network();
+    var linkCount = isFn(network, "getLinkCount") ? network.getLinkCount() : 0;
+    var discoveryStats = {
+      networkLinks: 0,
+      portLinkPairs: 0,
+      cableOtherPortPairs: 0,
+      antennaPairs: 0,
+    };
+
+    function safeCall(obj, methodName, args) {
+      if (!obj) return null;
+      try {
+        if (typeof obj[methodName] === "function") {
+          return obj[methodName].apply(obj, args || []);
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    function safePortCall(port, methodName) {
+      return safeCall(port, methodName, []);
+    }
+
+    function getLinkType(link) {
+      return safeCall(link, "getConnectionType", []);
+    }
+
+    function endpointKey(deviceName, portName) {
+      return String(deviceName) + "::" + String(portName);
+    }
+
+    function addConnection(device1Name, port1Name, device2Name, port2Name, link, discovery) {
+      if (!device1Name || !device2Name || !port1Name || !port2Name) return false;
+      if (device1Name === device2Name && port1Name === port2Name) return false;
+
+      var ep1 = endpointKey(device1Name, port1Name);
+      var ep2 = endpointKey(device2Name, port2Name);
+      var key = ep1 < ep2 ? ep1 + "--" + ep2 : ep2 + "--" + ep1;
+      if (seenConnections[key]) return false;
+      seenConnections[key] = true;
+
+      connections.push({
+        from: device1Name,
+        fromInterface: port1Name,
+        to: device2Name,
+        toInterface: port2Name,
+        type: getLinkType(link),
+        discovery: discovery,
+      });
+      return true;
+    }
+
+    function getPortNameSafe(port) {
+      if (!port) return "";
+      var name = safeCall(port, "getName", []);
+      return name === null ? "" : safeToString(name);
+    }
+
+    function getPortOwnerName(port) {
+      var owner = safeCall(port, "getOwnerDevice", []);
+      if (!owner) return "";
+      var name = safeCall(owner, "getName", []);
+      return name === null ? "" : safeToString(name);
+    }
 
     function rememberPortOwner(portName, port, deviceName) {
       if (!portOwners[portName]) portOwners[portName] = [];
@@ -1456,6 +1522,52 @@ getNetwork = function () {
       return null;
     }
 
+    function findOwnerName(port, remotePortName) {
+      return getPortOwnerName(port) || findPortOwner(port, remotePortName);
+    }
+
+    function addCableConnectionFromLink(link, discovery) {
+      var p1 = safeCall(link, "getPort1", []);
+      var p2 = safeCall(link, "getPort2", []);
+      if (!p1 || !p2) return false;
+
+      var port1Name = getPortNameSafe(p1);
+      var port2Name = getPortNameSafe(p2);
+      var device1Name = findOwnerName(p1, port2Name);
+      var device2Name = findOwnerName(p2, port1Name);
+      return addConnection(device1Name, port1Name, device2Name, port2Name, link, discovery);
+    }
+
+    function addAntennaConnections(antenna, discovery) {
+      var sourcePort = safeCall(antenna, "getPort", []);
+      if (!sourcePort) return 0;
+      var sourcePortName = getPortNameSafe(sourcePort);
+      var sourceDeviceName = findOwnerName(sourcePort, "");
+      if (!sourceDeviceName || !sourcePortName) return 0;
+
+      var count = safeCall(antenna, "getReceiverCount", []);
+      var added = 0;
+      count = count === null ? 0 : Number(count);
+      for (var idx = 0; idx < count; idx++) {
+        var receiver = safeCall(antenna, "getReceiverAt", [idx]);
+        var receiverPort = safeCall(receiver, "getPort", []);
+        if (!receiverPort) continue;
+        var receiverPortName = getPortNameSafe(receiverPort);
+        var receiverDeviceName = findOwnerName(receiverPort, sourcePortName);
+        if (addConnection(
+          sourceDeviceName,
+          sourcePortName,
+          receiverDeviceName,
+          receiverPortName,
+          antenna,
+          discovery
+        )) {
+          added++;
+        }
+      }
+      return added;
+    }
+
     for (var i = 0; i < deviceCount; i++) {
       var device = ipc.network().getDeviceAt(i);
       var deviceName = device.getName();
@@ -1466,8 +1578,28 @@ getNetwork = function () {
         var port = device.getPortAt(j);
         if (port) {
           var pname = port.getName();
+          var link = getPortLink(port);
+          var remotePortName = safeToString(safePortCall(port, "getRemotePortName"));
           rememberPortOwner(pname, port, deviceName);
-          interfaces.push({ name: pname, in_use: getPortLink(port) !== null });
+          portRecords.push({
+            deviceName: deviceName,
+            portName: pname,
+            remotePortName: remotePortName,
+            port: port,
+            link: link,
+          });
+          interfaces.push({
+            name: pname,
+            in_use: link !== null,
+            remotePortName: remotePortName,
+            linkType: getLinkType(link),
+            lightStatus: safePortCall(port, "getLightStatus"),
+            isPortUp: safePortCall(port, "isPortUp"),
+            isProtocolUp: safePortCall(port, "isProtocolUp"),
+            isPowerOn: safePortCall(port, "isPowerOn"),
+            isWireless: safePortCall(port, "isWirelessPort"),
+            portType: safePortCall(port, "getType"),
+          });
         }
       }
 
@@ -1480,25 +1612,52 @@ getNetwork = function () {
     }
 
     for (var k = 0; k < linkCount; k++) {
-      var lnk = ipc.network().getLinkAt(k);
-      if (!lnk || typeof lnk.getPort1 !== 'function' || typeof lnk.getPort2 !== 'function') continue;
+      var lnk = network.getLinkAt(k);
+      if (!lnk) continue;
 
-      var p1 = lnk.getPort1();
-      var p2 = lnk.getPort2();
-      if (!p1 || !p2) continue;
+      if (addCableConnectionFromLink(lnk, "network.getLinkAt")) {
+        discoveryStats.networkLinks++;
+      }
+      discoveryStats.antennaPairs += addAntennaConnections(lnk, "network.getLinkAt.antenna");
+    }
 
-      var port1Name = p1.getName();
-      var port2Name = p2.getName();
-      var device1Name = findPortOwner(p1, port2Name);
-      var device2Name = findPortOwner(p2, port1Name);
-      if (device1Name && device2Name) {
-        connections.push({
-          from: device1Name,
-          fromInterface: port1Name,
-          to: device2Name,
-          toInterface: port2Name,
-          type: lnk.getConnectionType(),
-        });
+    // Some Packet Tracer builds expose Port::getLink() but report zero links
+    // through Network::getLinkCount(). Use the documented Cable::getOtherPort()
+    // and Antenna receiver APIs as fallbacks so snapshots still include links.
+    for (var a = 0; a < portRecords.length; a++) {
+      var left = portRecords[a];
+      if (!left.link) continue;
+      var otherPort = safeCall(left.link, "getOtherPort", [left.deviceName, left.portName]);
+      if (otherPort) {
+        var otherPortName = getPortNameSafe(otherPort);
+        var otherDeviceName = findOwnerName(otherPort, left.portName);
+        if (addConnection(
+          left.deviceName,
+          left.portName,
+          otherDeviceName,
+          otherPortName,
+          left.link,
+          "port.getLink.getOtherPort"
+        )) {
+          discoveryStats.cableOtherPortPairs++;
+        }
+      }
+
+      discoveryStats.antennaPairs += addAntennaConnections(left.link, "port.getLink.antenna");
+
+      for (var b = a + 1; b < portRecords.length; b++) {
+        var right = portRecords[b];
+        if (left.link !== right.link) continue;
+        if (addConnection(
+          left.deviceName,
+          left.portName,
+          right.deviceName,
+          right.portName,
+          left.link,
+          "port.getLink"
+        )) {
+          discoveryStats.portLinkPairs++;
+        }
       }
     }
 
@@ -1509,10 +1668,151 @@ getNetwork = function () {
         connectionCount: connections.length,
         devices: devices,
         connections: connections,
+        metadata: {
+          linkCountReported: linkCount,
+          discoveryStats: discoveryStats,
+        },
       },
     };
   } catch (error) {
     return fail("", error);
+  }
+};
+
+auditNetwork = function (
+  expectedDeviceNames,
+  allowedDisconnectedDeviceNames,
+  wirelessClientDeviceNames,
+  requireConnectedDevices,
+  requireGreenLinks
+) {
+  try {
+    var net = getNetwork();
+    if (!net || !net.success) {
+      return net || { success: false, error: "getNetwork failed" };
+    }
+
+    var devices = net.result.devices || [];
+    var connections = net.result.connections || [];
+    var expected = Array.isArray(expectedDeviceNames) ? expectedDeviceNames : [];
+    var allowedDisconnected = Array.isArray(allowedDisconnectedDeviceNames) ? allowedDisconnectedDeviceNames : [];
+    var wirelessClients = Array.isArray(wirelessClientDeviceNames) ? wirelessClientDeviceNames : [];
+    var checkConnected = requireConnectedDevices !== false;
+    var checkGreen = requireGreenLinks === true;
+    var issues = [];
+    var warnings = [];
+    var byName = {};
+    var endpointCounts = {};
+
+    function auditEndpointKey(deviceName, portName) {
+      return String(deviceName) + "::" + String(portName);
+    }
+
+    function isAllowedDisconnected(deviceName) {
+      for (var i = 0; i < allowedDisconnected.length; i++) {
+        if (allowedDisconnected[i] === deviceName) return true;
+      }
+      return false;
+    }
+
+    function rememberEndpoint(deviceName, portName) {
+      if (!endpointCounts[deviceName]) endpointCounts[deviceName] = 0;
+      endpointCounts[deviceName]++;
+      endpointCounts[auditEndpointKey(deviceName, portName)] = 1;
+    }
+
+    for (var c = 0; c < connections.length; c++) {
+      rememberEndpoint(connections[c].from, connections[c].fromInterface);
+      rememberEndpoint(connections[c].to, connections[c].toInterface);
+    }
+
+    for (var d = 0; d < devices.length; d++) {
+      var device = devices[d];
+      byName[device.name] = device;
+
+      if (checkConnected && !isAllowedDisconnected(device.name)) {
+        var interfaces = device.interfaces || [];
+        var hasNetworkPort = interfaces.length > 0;
+        if (hasNetworkPort && !endpointCounts[device.name]) {
+          issues.push({
+            type: "device-disconnected",
+            device: device.name,
+            message: device.name + " has interfaces but no discovered links",
+          });
+        }
+      }
+
+      var ifaces = device.interfaces || [];
+      for (var p = 0; p < ifaces.length; p++) {
+        var iface = ifaces[p];
+        if (!iface || !iface.in_use) continue;
+
+        if (!endpointCounts[auditEndpointKey(device.name, iface.name)]) {
+          warnings.push({
+            type: "used-port-without-connection",
+            device: device.name,
+            interface: iface.name,
+            remotePortName: iface.remotePortName || "",
+          });
+        }
+
+        if (checkGreen && iface.lightStatus !== null && iface.lightStatus !== 2 && iface.lightStatus !== 3) {
+          issues.push({
+            type: "link-light-not-green",
+            device: device.name,
+            interface: iface.name,
+            lightStatus: iface.lightStatus,
+            message: device.name + " " + iface.name + " light status is " + iface.lightStatus,
+          });
+        }
+      }
+    }
+
+    for (var e = 0; e < expected.length; e++) {
+      if (!byName[expected[e]]) {
+        issues.push({
+          type: "missing-device",
+          device: expected[e],
+          message: expected[e] + " is missing from the workspace",
+        });
+      }
+    }
+
+    for (var w = 0; w < wirelessClients.length; w++) {
+      var wirelessName = wirelessClients[w];
+      var rawDevice = getDeviceByName(wirelessName);
+      if (!rawDevice) {
+        issues.push({ type: "missing-wireless-client", device: wirelessName });
+        continue;
+      }
+      var wireless = getWirelessDiagnostics(rawDevice);
+      if (!wireless || !wireless.currentApMac) {
+        issues.push({
+          type: "wireless-not-associated",
+          device: wirelessName,
+          wireless: wireless,
+          message: wirelessName + " is not associated with an AP",
+        });
+      }
+    }
+
+    return {
+      success: true,
+      result: {
+        ok: issues.length === 0,
+        issueCount: issues.length,
+        warningCount: warnings.length,
+        issues: issues,
+        warnings: warnings,
+        summary: {
+          deviceCount: net.result.deviceCount,
+          connectionCount: net.result.connectionCount,
+          metadata: net.result.metadata,
+        },
+      },
+    };
+  } catch (error) {
+    return fail("Error auditing network", error);
   }
 };
 
