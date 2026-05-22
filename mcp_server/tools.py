@@ -235,6 +235,26 @@ IOT_SUB_COMPONENT_SCHEMA = {
     "description": "Set Thing sub-component image indexes when the device exposes setSubComponentIndex.",
 }
 
+IOT_CUSTOM_VAR_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "value": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "number"},
+                    {"type": "boolean"},
+                ],
+            },
+            "remove": {"type": "boolean"},
+        },
+        "required": ["name"],
+    },
+    "description": "Set or remove Packet Tracer Thing custom variables by name.",
+}
+
 IOT_MOVE_TO_SCHEMA = {
     "type": "object",
     "properties": {
@@ -252,6 +272,7 @@ IOT_ACTION_SCHEMA = {
         "digitalOutputs": DIGITAL_OUTPUT_SCHEMA,
         "analogOutputs": ANALOG_OUTPUT_SCHEMA,
         "subComponents": IOT_SUB_COMPONENT_SCHEMA,
+        "customVars": IOT_CUSTOM_VAR_SCHEMA,
         "thingRotation": {"type": "number"},
         "serialOutput": {"type": "string"},
         "clearSerialOutputs": {"type": "boolean"},
@@ -789,6 +810,7 @@ TOOLS: list[dict] = [
                     "description": "Custom text labels to place on Thing-style devices.",
                 },
                 "subComponents": IOT_SUB_COMPONENT_SCHEMA,
+                "customVars": IOT_CUSTOM_VAR_SCHEMA,
                 "serialOutput": {
                     "type": "string",
                     "description": "Append a line to supported MCU/SBC/Thing serial output.",
@@ -820,6 +842,27 @@ TOOLS: list[dict] = [
                         "Optional external attribute names to query with "
                         "getDeviceExternalAttributeValue, e.g. ['level', 'state']."
                     ),
+                },
+                "subComponentNames": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Optional Thing sub-component names to query with "
+                        "getSubComponentIndex."
+                    ),
+                },
+                "includeSerialization": {
+                    "type": "boolean",
+                    "description": (
+                        "Include a truncated serializeToXml() preview for debugging "
+                        "Thing internals and component names."
+                    ),
+                },
+                "serializationMaxChars": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 20000,
+                    "description": "Maximum serialized XML preview characters; default is 4000.",
                 },
             },
             "required": ["deviceName"],

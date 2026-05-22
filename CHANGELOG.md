@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.15
+
+- Added custom variable writes for Thing-class IoT devices so MCP rules can drive prebuilt Door/Window state variables, not only raw I/O pins.
+- Extended `inspectIotDevice` with optional sub-component index probes and truncated `serializeToXml()` previews for debugging Packet Tracer Thing internals.
+
 ## 0.1.14
 
 - Accepted both `deviceName + targetDeviceName` and `targetDeviceName + nearDeviceName` forms for IoT proximity conditions.

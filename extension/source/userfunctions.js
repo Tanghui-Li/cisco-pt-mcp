@@ -1,7 +1,7 @@
 // User-callable functions exposed by the cisco-pt-mcp bridge.
 // Each returns { success: bool, ... } and is invoked via $se('runCode', 'return <fn>(<args>);').
 
-var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.14";
+var CISCO_PT_MCP_EXTENSION_VERSION = "0.1.15";
 var CISCO_PT_MCP_BRIDGE_HOST = "127.0.0.1";
 var CISCO_PT_MCP_BRIDGE_PORT = 7531;
 var CISCO_PT_MCP_IOT_AUTOMATION_RULES = {};
@@ -121,6 +121,25 @@ function readDeviceExternalAttributes(device, attributeNames) {
   return result;
 }
 
+function readSubComponentIndexes(device, subComponentNames) {
+  var result = {};
+  if (!Array.isArray(subComponentNames)) return result;
+  for (var i = 0; i < subComponentNames.length; i++) {
+    var name = subComponentNames[i];
+    if (!name) continue;
+    try {
+      if (isFn(device, "getSubComponentIndex")) {
+        result[name] = device.getSubComponentIndex(String(name));
+      } else {
+        result[name] = null;
+      }
+    } catch (e) {
+      result[name] = { error: String(e && e.message ? e.message : e) };
+    }
+  }
+  return result;
+}
+
 function listCustomVars(device) {
   var vars = [];
   if (!isFn(device, "getCustomVarsCount") || !isFn(device, "getCustomVarNameAt")) return vars;
@@ -136,6 +155,32 @@ function listCustomVars(device) {
     }
   } catch (e) {}
   return vars;
+}
+
+function applyCustomVars(device, customVars) {
+  if (!Array.isArray(customVars) || customVars.length === 0) return [];
+  if (!isFn(device, "addCustomVar")) {
+    throw new Error("Custom variables are not supported on " + device.getName());
+  }
+  var changed = [];
+  for (var i = 0; i < customVars.length; i++) {
+    var item = customVars[i] || {};
+    if (!item.name) continue;
+    var name = String(item.name);
+    if (item.remove === true) {
+      if (isFn(device, "removeCustomVar")) device.removeCustomVar(name);
+      changed.push(name);
+      continue;
+    }
+    if (isFn(device, "hasCustomVar") && isFn(device, "removeCustomVar")) {
+      try {
+        if (device.hasCustomVar(name)) device.removeCustomVar(name);
+      } catch (e) {}
+    }
+    device.addCustomVar(name, String(item.value !== undefined && item.value !== null ? item.value : ""));
+    changed.push(name);
+  }
+  return changed;
 }
 
 function numericValue(value) {
@@ -300,6 +345,11 @@ function applyIotControlOptions(deviceName, options) {
       device.setSubComponentIndex(String(sub.name), Number(sub.index));
     }
     applied.push("subComponents");
+  }
+
+  if (Array.isArray(options.customVars) && options.customVars.length > 0) {
+    applyCustomVars(device, options.customVars);
+    applied.push("customVars");
   }
 
   if (options.serialOutput !== undefined && options.serialOutput !== null) {
@@ -503,12 +553,17 @@ function defaultIotAutomationActions(ruleName) {
     return [{
       deviceName: "Window",
       digitalOutputs: [{ slot: 0, value: 0 }],
+      customVars: [{ name: "state", value: "0" }],
     }];
   }
   if (ruleName === "rfid-open-door") {
     return [{
       deviceName: "DOOR-ACCESS",
       digitalOutputs: [{ slot: 0, value: 1 }],
+      customVars: [
+        { name: "lock state", value: "0" },
+        { name: "door state", value: "1" },
+      ],
     }];
   }
   return [];
@@ -1859,7 +1914,8 @@ controlIotDevice = function (
   subComponents,
   serialOutput,
   clearSerialOutputs,
-  moveTo
+  moveTo,
+  customVars
 ) {
   try {
     var device = getDeviceByName(deviceName);
@@ -1878,6 +1934,7 @@ controlIotDevice = function (
       thingRotation: thingRotation,
       customTexts: customTexts,
       subComponents: subComponents,
+      customVars: customVars,
       serialOutput: serialOutput,
       clearSerialOutputs: clearSerialOutputs,
       moveTo: moveTo,
@@ -1948,7 +2005,7 @@ controlIotDevice = function (
   }
 };
 
-inspectIotDevice = function (deviceName, attributeNames) {
+inspectIotDevice = function (deviceName, attributeNames, subComponentNames, includeSerialization, serializationMaxChars) {
   try {
     var device = getDeviceByName(deviceName);
     if (!device) {
@@ -1968,11 +2025,14 @@ inspectIotDevice = function (deviceName, attributeNames) {
         sensorState: isFn(device, "getSensorState"),
         deviceExternalAttributes: isFn(device, "getDeviceExternalAttributes"),
         deviceExternalAttributeValue: isFn(device, "getDeviceExternalAttributeValue"),
+        customVars: isFn(device, "addCustomVar"),
+        serialization: isFn(device, "serializeToXml"),
       },
       processes: getProcessCapabilities(device, ["IoEClient", "IoeClient", "WirelessClient", "WirelessServer"]),
       slots: {},
       customVars: listCustomVars(device),
       requestedAttributes: readDeviceExternalAttributes(device, attributeNames),
+      requestedSubComponents: readSubComponentIndexes(device, subComponentNames),
     };
 
     try {
@@ -2001,6 +2061,20 @@ inspectIotDevice = function (deviceName, attributeNames) {
       if (isFn(device, "getSlotsCount")) info.slots.total = Number(device.getSlotsCount());
     } catch (e5) {
       info.slots.error = String(e5 && e5.message ? e5.message : e5);
+    }
+    if (includeSerialization === true && isFn(device, "serializeToXml")) {
+      try {
+        var xml = String(device.serializeToXml());
+        var maxChars = Number(serializationMaxChars || 4000);
+        if (!isFinite(maxChars) || maxChars < 0) maxChars = 4000;
+        info.serialization = {
+          length: xml.length,
+          preview: xml.substring(0, maxChars),
+          truncated: xml.length > maxChars,
+        };
+      } catch (e6) {
+        info.serializationError = String(e6 && e6.message ? e6.message : e6);
+      }
     }
 
     return {

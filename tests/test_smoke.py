@@ -78,10 +78,13 @@ def test_new_tool_schemas_present():
     assert "digitalOutputs" in iot_schema["properties"]
     assert "thingRotation" in iot_schema["properties"]
     assert "subComponents" in iot_schema["properties"]
+    assert "customVars" in iot_schema["properties"]
 
     inspect_iot_schema = tools.TOOLS_BY_NAME["inspectIotDevice"]["inputSchema"]
     assert inspect_iot_schema["required"] == ["deviceName"]
     assert "attributeNames" in inspect_iot_schema["properties"]
+    assert "subComponentNames" in inspect_iot_schema["properties"]
+    assert "includeSerialization" in inspect_iot_schema["properties"]
 
     automation_schema = tools.TOOLS_BY_NAME["runIotAutomation"]["inputSchema"]
     assert automation_schema["required"] == []
@@ -178,4 +181,4 @@ async def test_bridge_rejects_missing_result_field():
 
 
 def test_package_version_matches_pyproject():
-    assert __version__ == "0.1.14"
+    assert __version__ == "0.1.15"
