@@ -5,7 +5,7 @@
 - Added `getBridgeInfo` so users can verify which Packet Tracer `.pts` bridge is loaded.
 - Added explicit `none`, `null`, and `iot-open` authentication aliases for Packet Tracer `eAuthenNull = 0`, while keeping `open` mapped to documented `eAuthenOpen = 6`.
 - Expanded README for fork attribution, local development, Packet Tracer packaging, and wireless caveats.
-- Updated package metadata for the `mallocInf/cisco-pt-mcp` fork.
+- Updated package metadata for the `Tanghui-Li/cisco-pt-mcp` fork.
 
 ## 0.1.8
 

@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = "MIT"
 authors = [
     { name = "Muhammad Balawal" },
-    { name = "mallocInf" },
+    { name = "Tanghui-Li" },
 ]
 keywords = ["mcp", "model-context-protocol", "cisco", "packet-tracer", "networking", "claude", "llm"]
 classifiers = [
@@ -40,10 +40,10 @@ dependencies = [
 dev = ["pytest>=7.4.0", "pytest-asyncio>=0.23.0", "build>=1.2.0", "twine>=5.0.0"]
 
 [project.urls]
-Homepage      = "https://github.com/mallocInf/cisco-pt-mcp"
-Repository    = "https://github.com/mallocInf/cisco-pt-mcp"
-Issues        = "https://github.com/mallocInf/cisco-pt-mcp/issues"
-Changelog     = "https://github.com/mallocInf/cisco-pt-mcp/releases"
+Homepage      = "https://github.com/Tanghui-Li/cisco-pt-mcp"
+Repository    = "https://github.com/Tanghui-Li/cisco-pt-mcp"
+Issues        = "https://github.com/Tanghui-Li/cisco-pt-mcp/issues"
+Changelog     = "https://github.com/Tanghui-Li/cisco-pt-mcp/releases"
 
 [project.scripts]
 cisco-pt-mcp = "mcp_server.server:main"

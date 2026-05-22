@@ -9,7 +9,7 @@ The fork keeps the original MIT license and expands the tool surface for
 coursework, IoT labs, home gateways, wireless devices, DHCP, and Packet Tracer
 simulation verification.
 
-![Demo](https://raw.githubusercontent.com/mallocInf/cisco-pt-mcp/main/demo.gif)
+![Demo](https://raw.githubusercontent.com/Tanghui-Li/cisco-pt-mcp/main/demo.gif)
 
 ## What It Does
 
@@ -145,4 +145,4 @@ configuration changes, so only run clients you trust.
 MIT. See [`LICENSE`](LICENSE).
 
 Original project copyright belongs to Muhammad Balawal and contributors.
-Fork modifications are maintained by mallocInf and contributors.
+Fork modifications are maintained by Tanghui-Li and contributors.

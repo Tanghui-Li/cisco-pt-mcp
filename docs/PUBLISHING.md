@@ -1,6 +1,6 @@
 # Publishing the Fork
 
-These steps publish this fork to `mallocInf/cisco-pt-mcp` on GitHub.
+These steps publish this fork to `Tanghui-Li/cisco-pt-mcp` on GitHub.
 
 ## 1. Rebuild the Packet Tracer Extension
 
@@ -17,7 +17,7 @@ Expected `getBridgeInfo.extensionVersion` for this release: `0.1.9`.
 
 ## 2. Create the GitHub Repository
 
-Create an empty public repository named `cisco-pt-mcp` under the `mallocInf`
+Create an empty public repository named `cisco-pt-mcp` under the `Tanghui-Li`
 account. Do not initialize it with README, license, or `.gitignore`; this
 repository already contains those files.
 
@@ -26,14 +26,14 @@ repository already contains those files.
 ```sh
 cd "MCP Servers for PT/cisco-pt-mcp"
 git remote rename origin upstream
-git remote add origin git@github.com:mallocInf/cisco-pt-mcp.git
+git remote add origin git@github.com:Tanghui-Li/cisco-pt-mcp.git
 git remote -v
 ```
 
 Use HTTPS instead of SSH if preferred:
 
 ```sh
-git remote add origin https://github.com/mallocInf/cisco-pt-mcp.git
+git remote add origin https://github.com/Tanghui-Li/cisco-pt-mcp.git
 ```
 
 ## 4. Commit and Push
